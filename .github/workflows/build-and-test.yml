@@ -25,13 +25,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host: [
-          {
-            os: ubuntu-latest,
-            build-options: "-v --build-tests -Xswiftc -enable-testing",
-            test-options: "-v"
-          }
-        ]
+        build-options: "-v --build-tests -Xswiftc -enable-testing"
+        test-options: "-v"
+        os: [ubuntu-latest]
         configuration: [debug, release]
 
     runs-on: ${{ matrix.host.os }}
@@ -45,29 +41,23 @@ jobs:
         with:
           runCmd: |
             swift build -c ${{ matrix.configuration }} \
-              ${{ matrix.host.build-options }} &&
+              ${{ matrix.build-options }} &&
 
             swift test -c ${{ matrix.configuration }} \
-              ${{ matrix.host.test-options }}
+              ${{ matrix.test-options }}
 
   build-native:
     name: "Native: ${{ matrix.host.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
-        host: [
-          {
-            os: [macos-latest, ubuntu-latest, windows-latest],
-            build-options: "-v --build-tests -Xswiftc -enable-testing",
-            test-options: "-v"
-          }
-        ]
-        swift: [
-          {version: "5.8"}
-        ]
+        build-options: "-v --build-tests -Xswiftc -enable-testing"
+        test-options: "-v"
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        swift: [version: "5.8"]
         configuration: ["debug", "release"]
 
-    runs-on: ${{ matrix.host.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -86,11 +76,11 @@ jobs:
           export PKG_CONFIG_PATH=$PWD &&
 
           swift build -c ${{ matrix.configuration }} \
-            ${{ matrix.host.build-options }}
+            ${{ matrix.build-options }}
 
       - name: Test (${{ matrix.configuration }})
         run: |
           export PKG_CONFIG_PATH=$PWD &&
 
           swift test -c ${{ matrix.configuration }} \
-            ${{ matrix.host.test-options }}
+            ${{ matrix.test-options }}
