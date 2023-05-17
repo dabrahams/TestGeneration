@@ -4,18 +4,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "TestGeneration",
-    products: [
-        .library(
-            name: "TestGeneration",
-            targets: ["TestGeneration"]),
-    ],
-    targets: [
-        .target(
-            name: "TestGeneration"),
-        .testTarget(
-            name: "TestGenerationTests",
-            dependencies: ["TestGeneration", "TestGeneratorPlugin"]),
+  name: "TestGeneration",
+  products: [
+    .library(
+      name: "TestGeneration",
+      targets: ["TestGeneration"])
+  ],
+  targets: [
+    .target(
+      name: "TestGeneration"),
+    .testTarget(
+      name: "TestGenerationTests",
+      dependencies: ["TestGeneration", "TestGeneratorPlugin"]),
 
     .plugin(
       name: "TestGeneratorPlugin", capability: .buildTool(),
@@ -25,5 +25,5 @@ let package = Package(
       name: "GenerateTests",
       dependencies: []),
 
-    ]
+  ]
 )
