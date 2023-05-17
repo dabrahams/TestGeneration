@@ -1,7 +1,7 @@
 ---
 name: Build and test
 
-on:
+"on":
   push:
     branches: [main, rewrite]
     paths-ignore:
