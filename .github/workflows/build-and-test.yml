@@ -25,8 +25,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build-options: "-v --build-tests -Xswiftc -enable-testing"
-        test-options: "-v"
+        options: [
+          {
+            build: "-v --build-tests -Xswiftc -enable-testing",
+            test: "-v"
+          }
+        ]
         os: [ubuntu-latest]
         configuration: [debug, release]
 
@@ -41,21 +45,24 @@ jobs:
         with:
           runCmd: |
             swift build -c ${{ matrix.configuration }} \
-              ${{ matrix.build-options }} &&
+              ${{ matrix.options.build }} &&
 
-            swift test -c ${{ matrix.configuration }} \
-              ${{ matrix.test-options }}
+            swift test -c ${{ matrix.configuration }} ${{  options.test }}
 
   build-native:
     name: "Native: ${{ matrix.host.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
-        build-options: "-v --build-tests -Xswiftc -enable-testing"
-        test-options: "-v"
+        options: [
+          {
+            build: "-v --build-tests -Xswiftc -enable-testing",
+            test: "-v"
+          }
+        ]
         os: [macos-latest, ubuntu-latest, windows-latest]
-        swift: [version: "5.8"]
-        configuration: ["debug", "release"]
+        swift: [{version: "5.8"}]
+        configuration: [debug, release]
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -75,12 +82,10 @@ jobs:
         run: |
           export PKG_CONFIG_PATH=$PWD &&
 
-          swift build -c ${{ matrix.configuration }} \
-            ${{ matrix.build-options }}
+          swift build -c ${{ matrix.configuration }} ${{ matrix.options.build }}
 
       - name: Test (${{ matrix.configuration }})
         run: |
           export PKG_CONFIG_PATH=$PWD &&
 
-          swift test -c ${{ matrix.configuration }} \
-            ${{ matrix.test-options }}
+          swift test -c ${{ matrix.configuration }} ${{ matrix.options.test }}
