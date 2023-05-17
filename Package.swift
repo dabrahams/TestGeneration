@@ -10,6 +10,7 @@ let package = Package(
       name: "TestGeneration",
       targets: ["TestGeneration"])
   ],
+
   targets: [
     .target(
       name: "TestGeneration"),
