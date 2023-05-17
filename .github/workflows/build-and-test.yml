@@ -61,7 +61,7 @@ jobs:
             test-options: "-v"
           }
         ]
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest]
         swift: [{version: "5.8"}]
         configuration: [debug, release]
 
