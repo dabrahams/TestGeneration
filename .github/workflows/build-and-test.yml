@@ -34,7 +34,7 @@ jobs:
         os: [ubuntu-latest]
         configuration: [debug, release]
 
-    runs-on: ${{ matrix.host.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
 
