@@ -16,7 +16,9 @@ let package = Package(
       name: "TestGeneration"),
     .testTarget(
       name: "TestGenerationTests",
-      dependencies: ["TestGeneration", "TestGeneratorPlugin"]),
+      dependencies: ["TestGeneration"],
+      plugins: ["TestGeneratorPlugin"]
+    ),
 
     .plugin(
       name: "TestGeneratorPlugin", capability: .buildTool(),
