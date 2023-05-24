@@ -1,7 +1,5 @@
 import XCTest
 
-@testable import TestGeneration
-
 final class TestGenerationTests: XCTestCase {
   func testExample() throws {
     // XCTest Documenation

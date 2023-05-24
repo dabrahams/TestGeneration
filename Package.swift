@@ -5,18 +5,11 @@ import PackageDescription
 
 let package = Package(
   name: "TestGeneration",
-  products: [
-    .library(
-      name: "TestGeneration",
-      targets: ["TestGeneration"])
-  ],
+  products: [],
 
   targets: [
-    .target(
-      name: "TestGeneration"),
     .testTarget(
       name: "TestGenerationTests",
-      dependencies: ["TestGeneration"],
       plugins: ["TestGeneratorPlugin"]
     ),
 
