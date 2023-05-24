@@ -22,7 +22,7 @@ struct GenerateTests {
 
       generatedSource += """
 
-          func test_\(testName)() {
+          func test_\(testName)() throws {
             XCTAssert(true, \(String(reflecting: testName)))
           }
 
