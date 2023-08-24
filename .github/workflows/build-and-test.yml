@@ -1,10 +1,6 @@
 ---
 name: Build and test
 
-defaults:
-  run:
-    shell: bash -eo pipefail {0}
-
 "on":
   push:
     branches: [main, rewrite]
@@ -53,7 +49,7 @@ jobs:
               ${{ matrix.host.test-options }}
 
   build-native:
-    name: "Native: ${{ matrix.sys.os }}/${{ matrix.configuration }}"
+    name: "Native: ${{ matrix.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
@@ -63,41 +59,30 @@ jobs:
             test-options: "-v"
           }
         ]
-        sys:
-          - { os: macos-latest, shell: 'bash -eo pipefail {0}'}
-          - { os: ubuntu-latest, shell: 'bash -eo pipefail {0}'}
-          - { os: windows-latest, shell: cmd }
+        os: [macos-latest, ubuntu-latest, windows-latest]
         swift: [{version: "5.8"}]
         configuration: [debug, release]
 
-    defaults:
-      run:
-        shell: ${{ matrix.sys.shell }}
-
-    runs-on: ${{ matrix.sys.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup swift
-        if: matrix.sys.os != 'windows-latest'
+        if: matrix.os != 'windows-latest'
         uses: swift-actions/setup-swift@v1
         with:
           swift-version: ${{ matrix.swift.version }}
 
       - name: Setup swift
-        if: matrix.sys.os == 'windows-latest'
+        if: matrix.os == 'windows-latest'
         uses: compnerd/gha-setup-swift@main
         with:
           branch: swift-5.8.1-release
           tag: 5.8.1-RELEASE
 
       - name: Build (${{ matrix.configuration }})
-        run: |
-          swift build -c ${{ matrix.configuration }} \
-            ${{ matrix.host.build-options }}
+        run: swift build -c ${{ matrix.configuration }} ${{ matrix.host.build-options }}
 
       - name: Test (${{ matrix.configuration }})
-        run: |
-          swift test -c ${{ matrix.configuration }} \
-            ${{ matrix.host.test-options }}
+        run: swift test -c ${{ matrix.configuration }} ${{ matrix.host.test-options }}
