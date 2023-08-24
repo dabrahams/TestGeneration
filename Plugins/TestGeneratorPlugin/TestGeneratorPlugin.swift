@@ -1,6 +1,9 @@
 import PackagePlugin
 #if os(Windows)
 import WinSDK
+let executableExtension = ".exe"
+#else
+let executableExtension = ""
 #endif
 
 @main
@@ -13,7 +16,10 @@ struct TestGeneratorPlugin: BuildToolPlugin {
 
     let cmd: Command = .buildCommand(
         displayName: "Generating XCTestCases for \(inputPaths.map(\.stem)) into \(outputPath)",
-        executable: try context.tool(named: "GenerateTests").path.fixedForWindows,
+        executable:
+          try Path(
+            context.tool(named: "GenerateTests").path.string + executableExtension
+          ).fixedForWindows,
         arguments: inputPaths + [ outputPath ],
         inputFiles: inputPaths,
         outputFiles: [ outputPath ]
