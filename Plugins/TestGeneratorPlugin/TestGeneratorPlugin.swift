@@ -33,7 +33,7 @@ extension String {
   /// of Windows'
   /// [`GetFullPathNameW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamew).
   func utf16Converted(
-    by converter: (LPCWSTR, DWORD, LPWSTR, UnsafeMutablePointer<LPWSTR?>?) -> DWORD
+    by converter: (LPCWSTR, DWORD, LPWSTR, UnsafeMutablePointer<LPWSTR>?) -> DWORD
   ) -> String {
     return self.withCString(encodedAs: UTF16.self) { pwszPath in
       let resultLength = converter(pwszPath, 0, nil, nil)
