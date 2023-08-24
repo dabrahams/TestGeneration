@@ -11,7 +11,9 @@ let executableExtension = ""
 
 let package = Package(
   name: "TestGeneration",
-  products: [],
+  products: [
+    .executable(name: "GenerateTests" + executableExtension,
+                targets: ["GenerateTests"])],
 
   targets: [
     .testTarget(
