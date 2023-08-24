@@ -23,16 +23,34 @@ struct TestGeneratorPlugin: BuildToolPlugin {
 
 }
 
-extension Path {
-  var fixedForWindows: Path {
-    #if os(Windows)
-    return string.withCString(encodedAs: UTF16.self) { pwszPath in
-      let dwLength = GetFullPathNameW(pwszPath, 0, nil, nil)
-      withUnsafeTemporaryAllocation(of: WCHAR.self, capacity: Int(dwLength)) {
-        GetFullPathNameW(pwszPath, DWORD($0.count), $0.baseAddress, nil)
-        return String(utf16CodeUnits: $0, count: $0.count)
+extension String {
+  /// Applies `converter` to the UTF-16 representation and returns the
+  /// result, where converter has the signature and general semantics
+  /// of Windows'
+  /// [`GetFullPathNameW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamew).
+  func utf16Converted(
+    by converter: (
+      UnsafePointer<UTF16.CodeUnit>, Int32,
+      UnsafeMutablePointer<UTF16.CodeUnit>?,
+      UnsafeMutablePointer<UTF16.CodeUnit>?) -> Int32
+  ) -> String {
+    return self.withCString(encodedAs: UTF16.self) { pwszPath in
+      let resultLength = converter(pwszPath, 0, nil, nil)
+      return withUnsafeTemporaryAllocation(
+        of: UTF16.CodeUnit.self, capacity: Int(resultLength)
+      ) {
+        _ = converter(pwszPath, Int32($0.count), $0.baseAddress, nil)
+        return String(decoding: $0, as: UTF16.self)
       }
     }
+  }
+}
+
+extension Path {
+  /// `self` with its internal representation repaired for Windows systems.
+  var fixedForWindows: Path {
+    #if os(Windows)
+    return Self(string.converted(by: GetFullPathNameW))
     #else
     return self
     #endif
