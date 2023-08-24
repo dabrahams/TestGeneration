@@ -50,7 +50,7 @@ extension Path {
   /// `self` with its internal representation repaired for Windows systems.
   var fixedForWindows: Path {
     #if os(Windows)
-    return Self(string.converted(by: GetFullPathNameW))
+    return Self(string.utf16Converted(by: GetFullPathNameW))
     #else
     return self
     #endif
