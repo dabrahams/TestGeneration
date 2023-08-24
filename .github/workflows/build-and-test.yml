@@ -70,6 +70,10 @@ jobs:
         swift: [{version: "5.8"}]
         configuration: [debug, release]
 
+    defaults:
+      run:
+        shell: ${{ matrix.sys.shell }}
+
     runs-on: ${{ matrix.sys.os }}
     steps:
       - name: Checkout
