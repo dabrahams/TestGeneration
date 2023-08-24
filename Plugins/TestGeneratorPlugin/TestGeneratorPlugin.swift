@@ -13,7 +13,7 @@ struct TestGeneratorPlugin: BuildToolPlugin {
 
     let cmd: Command = .buildCommand(
         displayName: "Generating XCTestCases for \(inputPaths.map(\.stem)) into \(outputPath)",
-        executable: try context.tool(named: "GenerateTests").path,
+        executable: try context.tool(named: "GenerateTests").path.fixedForWindows,
         arguments: inputPaths + [ outputPath ],
         inputFiles: inputPaths,
         outputFiles: [ outputPath ]
