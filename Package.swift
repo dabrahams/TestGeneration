@@ -3,17 +3,9 @@
 
 import PackageDescription
 
-#if os(Windows)
-let executableExtension = ".exe"
-#else
-let executableExtension = ""
-#endif
-
 let package = Package(
   name: "TestGeneration",
-  products: [
-    .executable(name: "GenerateTests" + executableExtension,
-                targets: ["GenerateTests"])],
+  products: [],
 
   targets: [
     .testTarget(
@@ -23,7 +15,7 @@ let package = Package(
 
     .plugin(
       name: "TestGeneratorPlugin", capability: .buildTool(),
-      dependencies: [.target(name: "GenerateTests" + executableExtension)]),
+      dependencies: [.target(name: "GenerateTests")]),
 
     .executableTarget(
       name: "GenerateTests",
