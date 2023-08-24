@@ -29,7 +29,7 @@ extension Path {
     return string.withCString(encodedAs: UTF16.self) { pwszPath in
       let dwLength = GetFullPathNameW(pwszPath, 0, nil, nil)
       withUnsafeTemporaryAllocation(of: WCHAR.self, capacity: Int(dwLength)) {
-        GetFullPathNameW(pwszPath, $0.count, $0.baseAddress, nil)
+        GetFullPathNameW(pwszPath, DWORD($0.count), $0.baseAddress, nil)
         return String(utf16CodeUnits: $0, count: $0.count)
       }
     }
