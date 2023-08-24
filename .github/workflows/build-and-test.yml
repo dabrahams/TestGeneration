@@ -53,7 +53,7 @@ jobs:
               ${{ matrix.host.test-options }}
 
   build-native:
-    name: "Native: ${{ matrix.os }}/${{ matrix.configuration }}"
+    name: "Native: ${{ matrix.sys.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
@@ -63,23 +63,26 @@ jobs:
             test-options: "-v"
           }
         ]
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        sys:
+          - { os: macos-latest, shell: 'bash -eo pipefail {0}'}
+          - { os: ubuntu-latest, shell: 'bash -eo pipefail {0}'}
+          - { os: windows-latest, shell: cmd }
         swift: [{version: "5.8"}]
         configuration: [debug, release]
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.sys.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Setup swift
-        if: matrix.os != 'windows-latest'
+        if: matrix.sys.os != 'windows-latest'
         uses: swift-actions/setup-swift@v1
         with:
           swift-version: ${{ matrix.swift.version }}
 
       - name: Setup swift
-        if: matrix.os == 'windows-latest'
+        if: matrix.sys.os == 'windows-latest'
         uses: compnerd/gha-setup-swift@main
         with:
           branch: swift-5.8.1-release
@@ -87,14 +90,10 @@ jobs:
 
       - name: Build (${{ matrix.configuration }})
         run: |
-          export PKG_CONFIG_PATH=$PWD &&
-
           swift build -c ${{ matrix.configuration }} \
             ${{ matrix.host.build-options }}
 
       - name: Test (${{ matrix.configuration }})
         run: |
-          export PKG_CONFIG_PATH=$PWD &&
-
           swift test -c ${{ matrix.configuration }} \
             ${{ matrix.host.test-options }}
