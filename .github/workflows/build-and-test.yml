@@ -1,6 +1,10 @@
 ---
 name: Build and test
 
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
+
 "on":
   push:
     branches: [main, rewrite]
@@ -21,7 +25,7 @@ name: Build and test
 
 jobs:
   build-devcontainer:
-    name: "Devcontainer: ${{ matrix.host.os }}/${{ matrix.configuration }}"
+    name: "Devcontainer: ${{ matrix.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
