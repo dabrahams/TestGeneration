@@ -1,7 +1,6 @@
 import PackagePlugin
 #if os(Windows)
 import WinSDK
-import Foundation
 #endif
 
 @main
@@ -52,9 +51,9 @@ extension Path {
   /// `self` with its internal representation repaired for Windows systems.
   var fixedForWindows: Path {
     #if os(Windows)
-    Path(URL(fileURLWithPath: string.utf16Converted(by: GetFullPathNameW)).withUnsafeFileSystemRepresentation { String(cString: $0!) })
+    return Self(string.utf16Converted(by: GetFullPathNameW))
     #else
-    self
+    return self
     #endif
   }
 }
