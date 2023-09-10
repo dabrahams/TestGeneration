@@ -35,6 +35,5 @@ struct GenerateTests {
     try generatedSource.write(to: output, atomically: true, encoding: .utf8)
   }
 }
-public func main() throws {
-  try GenerateTests.main()
-}
+
+try GenerateTests.main()
