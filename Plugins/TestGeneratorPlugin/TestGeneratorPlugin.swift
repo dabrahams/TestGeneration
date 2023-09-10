@@ -13,7 +13,7 @@ struct TestGeneratorPlugin: BuildToolPlugin {
 
     let cmd: Command = .buildCommand(
         displayName: "Generating XCTestCases for \(inputPaths.map(\.stem)) into \(outputPath)",
-        executable: try context.tool(named: "GenerateTests").path.fixedForWindows,
+        executable: try context.tool(named: "GenerateTests").path.fixedForWindowsEXE,
         arguments: inputPaths + [ outputPath ],
         inputFiles: inputPaths,
         outputFiles: [ outputPath ]
@@ -56,4 +56,14 @@ extension Path {
     return self
     #endif
   }
+
+  /// `self` with its internal representation repaired for Windows systems, plus an .EXE extension.
+  var fixedForWindowsEXE: Path {
+    #if os(Windows)
+    return Self(string.utf16Converted(by: GetFullPathNameW) + ".exe")
+    #else
+    return self
+    #endif
+  }
+
 }
