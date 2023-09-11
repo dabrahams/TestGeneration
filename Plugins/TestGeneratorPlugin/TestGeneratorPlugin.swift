@@ -10,10 +10,11 @@ struct TestGeneratorPlugin: BuildToolPlugin {
     guard let target = target as? SourceModuleTarget else { return [] }
     let inputPaths = target.sourceFiles(withSuffix: "testgen").map(\.path.fixedForWindows)
     let outputPath = context.pluginWorkDirectory.appending("GeneratedTests.swift").fixedForWindows
+    let exePath = try context.tool(named: "GenerateTests").path.fixedForWindows
 
     let cmd: Command = .buildCommand(
         displayName: "Generating XCTestCases for \(inputPaths.map(\.stem)) into \(outputPath)",
-        executable: try context.tool(named: "GenerateTests").path.fixedForWindowsEXE,
+        executable: exePath,
         arguments: inputPaths + [ outputPath ],
         inputFiles: inputPaths,
         outputFiles: [ outputPath ]
@@ -36,12 +37,12 @@ extension String {
     by converter: (LPCWSTR, DWORD, LPWSTR, UnsafeMutablePointer<LPWSTR>?) -> DWORD
   ) -> String {
     return self.withCString(encodedAs: UTF16.self) { pwszPath in
-      let resultLength = converter(pwszPath, 0, nil, nil)
+      let resultLengthPlusTerminator = converter(pwszPath, 0, nil, nil)
       return withUnsafeTemporaryAllocation(
-        of: UTF16.CodeUnit.self, capacity: Int(resultLength)
+        of: UTF16.CodeUnit.self, capacity: Int(resultLengthPlusTerminator)
       ) {
         _ = converter(pwszPath, DWORD($0.count), $0.baseAddress, nil)
-        return String(decoding: $0, as: UTF16.self)
+        return String(decoding: $0.dropLast(), as: UTF16.self)
       }
     }
   }
@@ -52,15 +53,6 @@ extension Path {
   var fixedForWindows: Path {
     #if os(Windows)
     return Self(string.utf16Converted(by: GetFullPathNameW))
-    #else
-    return self
-    #endif
-  }
-
-  /// `self` with its internal representation repaired for Windows systems, plus an .EXE extension.
-  var fixedForWindowsEXE: Path {
-    #if os(Windows)
-    return Self(string.utf16Converted(by: GetFullPathNameW) + ".exe")
     #else
     return self
     #endif
