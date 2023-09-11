@@ -1,5 +1,6 @@
 import Foundation
 
+@main
 struct GenerateTests {
   static func main() throws {
 
@@ -35,5 +36,3 @@ struct GenerateTests {
     try generatedSource.write(to: output, atomically: true, encoding: .utf8)
   }
 }
-
-try GenerateTests.main()
