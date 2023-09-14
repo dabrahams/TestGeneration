@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "sourceLanguages": [
+        "swift"
+      ],
+      "name": "Debug GenerateTests",
+      "program": "${workspaceFolder:TestGeneration}\\.build/debug/GenerateTests",
+      "args": [],
+      "cwd": "${workspaceFolder:TestGeneration}",
+      "preLaunchTask": "swift: Build Debug GenerateTests"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "sourceLanguages": [
+        "swift"
+      ],
+      "name": "Release GenerateTests",
+      "program": "${workspaceFolder:TestGeneration}\\.build/release/GenerateTests",
+      "args": [],
+      "cwd": "${workspaceFolder:TestGeneration}",
+      "preLaunchTask": "swift: Build Release GenerateTests"
+    }
+  ]
+}

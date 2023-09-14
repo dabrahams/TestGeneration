@@ -19,7 +19,9 @@ let package = Package(
 
     .executableTarget(
       name: "GenerateTests",
-      dependencies: []),
+      dependencies: [],
+      swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]
+      ),
 
   ]
 )
