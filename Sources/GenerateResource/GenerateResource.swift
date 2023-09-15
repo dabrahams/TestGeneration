@@ -4,6 +4,7 @@ import Foundation
 struct GenerateResource {
   static func main() throws {
 
+    print("GenerateResource invocation:",  CommandLine.arguments)
     let inputs = CommandLine.arguments.dropFirst().dropLast()
       .map(URL.init(fileURLWithPath:))
 

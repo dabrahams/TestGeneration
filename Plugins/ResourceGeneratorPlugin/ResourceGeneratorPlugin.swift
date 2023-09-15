@@ -9,13 +9,13 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
   func createBuildCommands(context: PluginContext, target: Target) throws -> [Command] {
     let inputs = (target as! SourceModuleTarget).sourceFiles(withSuffix: ".in").map {
-      URL(fileURLWithPath: $0.path.fixedForWindows.string)
+      URL(fileURLWithPath: $0.path.fixedForWindows)
     }
 
     if inputs.isEmpty { return [] }
 
     let outputDirectory = URL(
-      fileURLWithPath: context.pluginWorkDirectory.appending("GeneratedResources").fixedForWindows.string)
+      fileURLWithPath: context.pluginWorkDirectory.appending("GeneratedResources").fixedForWindows)
 
     let outputs = inputs.map {
       outputDirectory.appendingPathComponent(
@@ -26,8 +26,8 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     return [
       .buildCommand(
         displayName: "Processing",
-        executable: try context.tool(named: "GenerateResource").path,
-        arguments: inputs.map { $0.path } + [ outputDirectory ],
+        executable: try Path(context.tool(named: "GenerateResource").path.fixedForWindows),
+        arguments: inputs.map { $0.path } + [ outputDirectory.path ],
         inputFiles: inputs.map { Path($0.path) },
         outputFiles: outputs.map { Path($0.path) }
       )]
@@ -61,11 +61,11 @@ extension String {
 
 extension Path {
   /// `self` with its internal representation repaired for Windows systems.
-  var fixedForWindows: Path {
+  var fixedForWindows: String {
     #if os(Windows)
-    return Self(string.utf16Converted(by: GetFullPathNameW))
+    return string.utf16Converted(by: GetFullPathNameW)
     #else
-    return self
+    return self.string
     #endif
   }
 
