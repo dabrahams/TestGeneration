@@ -18,6 +18,7 @@ let package = Package(
       // ,
       // dependencies: [.target(name: "GenerateResource")]
       ),
+
     .executableTarget(name: "GenerateResource",
       swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]),
 

@@ -4,6 +4,33 @@ import Foundation
 import WinSDK
 #endif
 
+#if os(Windows)
+fileprivate let pathEnvironmentVariable = "Path"
+/// The separator between elements of the executable search path.
+fileprivate let pathEnvironmentSeparator: Character = ";"
+#else
+fileprivate let pathEnvironmentVariable = "PATH"
+fileprivate let pathEnvironmentSeparator: Character = ":"
+#endif
+
+///
+fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
+
+extension URL {
+  /// Returns the URL given by removing the entire `suffix`, if
+  /// present, from the tail of `self.pathComponents`; returns `nil`
+  /// otherwise.
+  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix) -> URL? {
+    var r = self
+    var remainingSuffix = suffix[...]
+    while let x = remainingSuffix.popLast() {
+      if r.lastPathComponent != x { return nil }
+      r.deleteLastPathComponent()
+    }
+    return r
+  }
+}
+
 @main
 struct ResourceGeneratorPlugin: BuildToolPlugin {
 
@@ -23,32 +50,28 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
-    let script = URL(context.package.directory).appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
+    let script = URL(context.package.directory)
+      .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
     let executable = workDirectory.appendingPathComponent("GenerateResource.exe")
 
-#if os(Windows)
-    let pathSeparator = ";"
-#else
-    let pathSeparator = ":"
-#endif
-    var searchPath = ProcessInfo.processInfo.environment["Path"]!
-      .split(separator: pathSeparator).map { URL(fileURLWithPath: String($0)) }
+    var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
+      .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
 
-    // SwiftPM plugins seem to put this PluginAPI directory in the path.
-    // We prefer to find the swiftc from the same toolchain so prepend it to searchPath.
-    let pluginAPISuffix = #"\lib\swift\pm\PluginAPI"#
-    if let p = searchPath.lazy.map(\.path).first(where: { $0.hasSuffix(pluginAPISuffix) }) {
-      searchPath = [ URL(fileURLWithPath: p.dropLast(pluginAPISuffix.count - 1) + "bin") ] // + searchPath
+    // SwiftPM plugins seem to put this PluginAPI directory in the
+    // path.  We prefer to find the swiftc from the same toolchain,
+    // rather than whatever was first in the path, so prepend it to
+    // searchPath.
+    if let p = searchPath.lazy.compactMap({ $0.sansPathComponentSuffix(pluginAPISuffix) }).first {
+      searchPath = [ p.appendingPathComponent("bin") ] + searchPath
     }
 
-    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc.exe") }
+    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc") }
       .first { FileManager().isExecutableFile(atPath: $0.path) }!
 
     return [
             
        .buildCommand(
         displayName: "Compiling script",
-//        executable: Path(#"C:\Program Files\Swift\Toolchains\0.0.0+Asserts\usr\bin\swiftc.exe"#),
         executable: swiftc.spmPath,
         arguments: [ script.path, "-o", executable.path, "-parse-as-library"],
         inputFiles: [ script.spmPath ],
@@ -96,7 +119,7 @@ extension URL {
     #if os(Windows)
     self.init(fileURLWithPath: path.string.utf16Converted(by: GetFullPathNameW))
     #else
-    return self.init(fileURLWithPath: path.string)
+    self.init(fileURLWithPath: path.string)
     #endif
   }
 
