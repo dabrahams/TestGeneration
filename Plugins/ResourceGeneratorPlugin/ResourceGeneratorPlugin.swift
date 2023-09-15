@@ -26,11 +26,30 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     let script = URL(context.package.directory).appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
     let executable = workDirectory.appendingPathComponent("GenerateResource.exe")
 
+#if os(Windows)
+    let pathSeparator = ";"
+#else
+    let pathSeparator = ":"
+#endif
+    var searchPath = ProcessInfo.processInfo.environment["Path"]!
+      .split(separator: pathSeparator).map { URL(fileURLWithPath: String($0)) }
+
+    // SwiftPM plugins seem to put this PluginAPI directory in the path.
+    // We prefer to find the swiftc from the same toolchain so prepend it to searchPath.
+    let pluginAPISuffix = #"\lib\swift\pm\PluginAPI"#
+    if let p = searchPath.lazy.map(\.path).first(where: { $0.hasSuffix(pluginAPISuffix) }) {
+      searchPath = [ URL(fileURLWithPath: p.dropLast(pluginAPISuffix.count - 1) + "bin") ] // + searchPath
+    }
+
+    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc.exe") }
+      .first { FileManager().isExecutableFile(atPath: $0.path) }!
+
     return [
             
        .buildCommand(
         displayName: "Compiling script",
-        executable: Path(#"C:\Program Files\Swift\Toolchains\0.0.0+Asserts\usr\bin\swiftc.exe"#),
+//        executable: Path(#"C:\Program Files\Swift\Toolchains\0.0.0+Asserts\usr\bin\swiftc.exe"#),
+        executable: swiftc.spmPath,
         arguments: [ script.path, "-o", executable.path, "-parse-as-library"],
         inputFiles: [ script.spmPath ],
         outputFiles: [ executable.spmPath ]),
