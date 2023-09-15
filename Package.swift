@@ -4,22 +4,28 @@
 import PackageDescription
 
 let package = Package(
-  name: "TestGeneration",
+  name: "ResourceGeneration",
   products: [],
 
   targets: [
     .testTarget(
-      name: "TestGenerationTests",
-      plugins: ["TestGeneratorPlugin"]
+      name: "ResourceGenerationTests",
+      dependencies: ["LibWithResource"]
     ),
 
     .plugin(
-      name: "TestGeneratorPlugin", capability: .buildTool(),
-      dependencies: [.target(name: "GenerateTests")]),
+      name: "ResourceGeneratorPlugin", capability: .buildTool(),
+      dependencies: [.target(name: "GenerateResource")]),
 
     .executableTarget(
-      name: "GenerateTests",
+      name: "GenerateResource",
       dependencies: []),
 
+    .target(
+      name: "LibWithResource",
+      // resources: copied as if by .process()
+      resources: [],
+      plugins: ["ResourceGeneratorPlugin"]
+    ),
   ]
 )
