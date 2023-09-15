@@ -14,8 +14,10 @@ let package = Package(
     ),
 
     .plugin(
-      name: "ResourceGeneratorPlugin", capability: .buildTool(),
-      dependencies: [.target(name: "GenerateResource")]),
+      name: "ResourceGeneratorPlugin", capability: .buildTool()
+      // ,
+      // dependencies: [.target(name: "GenerateResource")]
+      ),
     .executableTarget(name: "GenerateResource",
       swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]),
 

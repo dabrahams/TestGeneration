@@ -9,13 +9,13 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
   func createBuildCommands(context: PluginContext, target: Target) throws -> [Command] {
     let inputs = (target as! SourceModuleTarget).sourceFiles(withSuffix: ".in").map {
-      URL(fileURLWithPath: $0.path.fixedForWindows)
+      URL($0.path)
     }
 
     if inputs.isEmpty { return [] }
 
-    let outputDirectory = URL(
-      fileURLWithPath: context.pluginWorkDirectory.appending("GeneratedResources").fixedForWindows)
+    let workDirectory = URL(context.pluginWorkDirectory)
+    let outputDirectory = workDirectory.appendingPathComponent("GeneratedResources")
 
     let outputs = inputs.map {
       outputDirectory.appendingPathComponent(
@@ -23,14 +23,26 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
+    let script = URL(context.package.directory).appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
+    let executable = workDirectory.appendingPathComponent("GenerateResource.exe")
+
     return [
-      .buildCommand(
-        displayName: "Processing",
-        executable: try Path(context.tool(named: "GenerateResource").path.fixedForWindows),
-        arguments: inputs.map { $0.path } + [ outputDirectory.path ],
-        inputFiles: inputs.map { Path($0.path) },
-        outputFiles: outputs.map { Path($0.path) }
-      )]
+            
+       .buildCommand(
+        displayName: "Compiling script",
+        executable: Path(#"C:\Program Files\Swift\Toolchains\0.0.0+Asserts\usr\bin\swiftc.exe"#),
+        arguments: [ script.path, "-o", executable.path, "-parse-as-library"],
+        inputFiles: [ script.spmPath ],
+        outputFiles: [ executable.spmPath ]),
+
+       .buildCommand(
+        displayName: "Running script",
+        executable: executable.spmPath,
+        arguments: inputs.map(\.path) + [ outputDirectory.path ],
+        inputFiles: inputs.map(\.spmPath) + [ executable.spmPath ],
+        outputFiles: outputs.map(\.spmPath)),
+    ]
+
   }
 
 }
@@ -59,14 +71,16 @@ extension String {
   }
 }
 
-extension Path {
-  /// `self` with its internal representation repaired for Windows systems.
-  var fixedForWindows: String {
+extension URL {
+
+  init(_ path: Path) {
     #if os(Windows)
-    return string.utf16Converted(by: GetFullPathNameW)
+    self.init(fileURLWithPath: path.string.utf16Converted(by: GetFullPathNameW))
     #else
-    return self.string
+    return self.init(fileURLWithPath: path.string)
     #endif
   }
+
+  var spmPath: Path { Path(self.path) } 
 
 }
