@@ -16,13 +16,15 @@ let package = Package(
     .plugin(
       name: "ResourceGeneratorPlugin", capability: .buildTool(),
       dependencies: [.target(name: "GenerateResource")]),
-    .executableTarget(name: "GenerateResource"),
+    .executableTarget(name: "GenerateResource",
+      swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]),
 
     .target(
       name: "LibWithResource",
       plugins: ["ResourceGeneratorPlugin"]
     ),
 
-    .executableTarget(name: "AppWithResource", dependencies: ["LibWithResource"]),
+    .executableTarget(name: "AppWithResource", dependencies: ["LibWithResource"],
+       swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]),
   ]
 )
