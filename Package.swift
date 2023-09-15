@@ -16,16 +16,13 @@ let package = Package(
     .plugin(
       name: "ResourceGeneratorPlugin", capability: .buildTool(),
       dependencies: [.target(name: "GenerateResource")]),
-
-    .executableTarget(
-      name: "GenerateResource",
-      dependencies: []),
+    .executableTarget(name: "GenerateResource"),
 
     .target(
       name: "LibWithResource",
-      // resources: copied as if by .process()
-      resources: [],
       plugins: ["ResourceGeneratorPlugin"]
     ),
+
+    .executableTarget(name: "AppWithResource", dependencies: ["LibWithResource"]),
   ]
 )
