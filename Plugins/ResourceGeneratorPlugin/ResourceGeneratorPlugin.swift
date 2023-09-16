@@ -24,31 +24,42 @@ fileprivate let executableSuffix = ""
 /// A path component suffix used to guess at the right directory in
 /// which to find Swift when compiling build tool plugin executables.
 ///
-/// SwiftPM puts a descendant of the current Swift Toolchain directory
-/// having this component suffix into the executable search path when
-/// plugins are run.
+/// SwiftPM seems to put a descendant of the current Swift Toolchain
+/// directory having this component suffix into the executable search
+/// path when plugins are run.
 fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
 
-/// Workaround for SPM's buggy `Path` type on Windows.
-///
-/// SPM `PackagePlugin.Path` uses a representation that—if not
-/// repaired before used by a `BuildToolPlugin` on Windows—will cause
-/// files not to be found.  Rather than trust a `Path`, therefore, we
-/// immediately convert them to `URL`s, simultaneously fixing up the
-/// Windows representation, and do all manipulations through `URL`'s
-/// API, converting back to `Path`s at the last possible moment.
-extension URL {
+// Workarounds for SPM's buggy `Path` type on Windows.
+//
+// SPM `PackagePlugin.Path` uses a representation that—if not
+// repaired before used by a `BuildToolPlugin` on Windows—will cause
+// files not to be found.
+extension Path {
 
-  /// Creates an instance referencing `path` in the filesystem.
-  init(_ path: Path) {
+  /// A string representation appropriate to the platform
+  private var platformString: String {
     #if os(Windows)
-    self.init(fileURLWithPath: path.string.utf16Converted(by: GetFullPathNameW))
+    string.withCString(encodedAs: UTF16.self) { pwszPath in
+      // Allocate a buffer for the repaired UTF-16.
+      let bufferSize = Int(GetFullPathNameW(pwszPath, 0, nil, nil))
+      var buffer = Array<UTF16.CodeUnit>(repeating: 0, count: bufferSize)
+      // Actually do the repair
+      _ = GetFullPathNameW(pwszPath, DWORD(bufferSize), &buffer, nil)
+      // Drop the zero terminator and convert back to a Swift string.
+      return String(decoding: buffer.dropLast(), as: UTF16.self)
+    }
     #else
-    self.init(fileURLWithPath: path.string)
+    string
     #endif
   }
 
-  /// The SPM PackagePlugin.Path representation.
+  /// A `URL` referring to the same location.
+  fileprivate var url: URL { URL(fileURLWithPath: platformString) }
+}
+
+extension URL {
+
+  /// A Swift Package Manager-compatible representation.
   var spmPath: Path { Path(self.path) }
 
 }
@@ -57,13 +68,16 @@ extension URL {
 struct ResourceGeneratorPlugin: BuildToolPlugin {
 
   func createBuildCommands(context: PluginContext, target: Target) throws -> [Command] {
-    // A downcast is always required to access the source files.
+    // Rather than trust operations on `PackagePlugin.Path`, we
+    // immediately convert them to `URL`s and do all manipulations
+    // through `URL`'s API, converting back to `Path`s at the last
+    // possible moment.
     let inputs = (target as! SourceModuleTarget)
-      .sourceFiles(withSuffix: ".in").map { URL($0.path) }
+      .sourceFiles(withSuffix: ".in").map(\.path.url)
 
     if inputs.isEmpty { return [] }
 
-    let workDirectory = URL(context.pluginWorkDirectory)
+    let workDirectory = context.pluginWorkDirectory.url
     let outputDirectory = workDirectory.appendingPathComponent("GeneratedResources")
 
     let outputs = inputs.map {
@@ -72,19 +86,20 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
-    let script = URL(context.package.directory)
+    // We have to know where the converter sources are relative to this package.
+    let converterSource = context.package.directory.url
       .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
 
-    let executable = workDirectory.appendingPathComponent(
+    let converter = workDirectory.appendingPathComponent(
       "GenerateResource" + executableSuffix)
 
+    //
+    // Find an appropriate Swift executable with which to compile the converter.
+    //
     var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
       .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
 
-    // SwiftPM plugins seem to put this PluginAPI directory in the
-    // path.  We prefer to find the swiftc from the same toolchain,
-    // rather than whatever was first in the path, so prepend it to
-    // searchPath.
+    // Attempt to prepend the path to the toolchain executables running this plugin
     if let p = searchPath.lazy.compactMap({ $0.sansPathComponentSuffix(pluginAPISuffix) }).first {
       searchPath = [ p.appendingPathComponent("bin") ] + searchPath
     }
@@ -93,19 +108,18 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       .first { FileManager().isExecutableFile(atPath: $0.path) }!
 
     return [
-            
        .buildCommand(
-        displayName: "Compiling script",
+        displayName: "Compiling converter",
         executable: swiftc.spmPath,
-        arguments: [ script.path, "-o", executable.path, "-parse-as-library"],
-        inputFiles: [ script.spmPath ],
-        outputFiles: [ executable.spmPath ]),
+        arguments: [ converterSource.path, "-o", converter.path, "-parse-as-library"],
+        inputFiles: [ converterSource.spmPath ],
+        outputFiles: [ converter.spmPath ]),
 
        .buildCommand(
-        displayName: "Running script",
-        executable: executable.spmPath,
+        displayName: "Running converter",
+        executable: converter.spmPath,
         arguments: inputs.map(\.path) + [ outputDirectory.path ],
-        inputFiles: inputs.map(\.spmPath) + [ executable.spmPath ],
+        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
         outputFiles: outputs.map(\.spmPath)),
     ]
 
@@ -113,36 +127,14 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
 }
 
-typealias DWORD = UInt32
-typealias LPCWSTR = UnsafePointer<UTF16.CodeUnit>?
-typealias LPWSTR = UnsafeMutablePointer<UTF16.CodeUnit>?
-
-extension String {
-  /// Applies `converter` to the UTF-16 representation and returns the
-  /// result, where converter has the signature and general semantics
-  /// of Windows'
-  /// [`GetFullPathNameW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamew).
-  func utf16Converted(
-    by converter: (LPCWSTR, DWORD, LPWSTR, UnsafeMutablePointer<LPWSTR>?) -> DWORD
-  ) -> String {
-    return self.withCString(encodedAs: UTF16.self) { pwszPath in
-      let resultLengthPlusTerminator = converter(pwszPath, 0, nil, nil)
-      return withUnsafeTemporaryAllocation(
-        of: UTF16.CodeUnit.self, capacity: Int(resultLengthPlusTerminator)
-      ) {
-        _ = converter(pwszPath, DWORD($0.count), $0.baseAddress, nil)
-        return String(decoding: $0.dropLast(), as: UTF16.self)
-      }
-    }
-  }
-}
-
 extension URL {
 
-  /// Returns the URL given by removing all the elements of `suffix`, if
-  /// present, from the tail of `self.pathComponents`; returns `nil`
-  /// otherwise.
-  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix) -> URL? {
+  /// Returns the URL given by removing all the elements of `suffix`
+  /// from the tail of `pathComponents`, or` `nil` if `suffix` is not
+  /// a suffix of `pathComponents`.
+  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix)
+    -> URL?
+  {
     var r = self
     var remainingSuffix = suffix[...]
     while let x = remainingSuffix.popLast() {
