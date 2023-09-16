@@ -98,6 +98,10 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     }
 
     #if os(Windows)
+    // Instead of depending on the GenerateResoure tool, which causes
+    // Link errors on Windows (See Package.swift), "manually" assemble
+    // a build command that builds the GenerateResoure tool into the
+    // plugin work directory and add it to the returned commands.
 
     // We have to know where the converter sources are relative to this package.
     let converterSource = context.package.directory.url
@@ -130,7 +134,8 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
     #else
 
-    let buildConverter: [Command] = [] // This part will be taken care of automatically by SPM
+    //  Building the tool will be taken care of automatically by SPM.
+    let buildConverter: [Command] = []
     let converter = try context.tool(named: "GenerateResource").path.url
 
     #endif
