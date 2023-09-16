@@ -29,6 +29,14 @@ fileprivate let executableSuffix = ""
 /// plugins are run.
 fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
 
+/// Workaround for SPM's buggy `Path` type on Windows.
+///
+/// SPM `PackagePlugin.Path` uses a representation that—if not
+/// repaired before used by a `BuildToolPlugin` on Windows—will cause
+/// files not to be found.  Rather than trust a `Path`, therefore, we
+/// immediately convert them to `URL`s, simultaneously fixing up the
+/// Windows representation, and do all manipulations through `URL`'s
+/// API, converting back to `Path`s at the last possible moment.
 extension URL {
 
   /// Creates an instance referencing `path` in the filesystem.
