@@ -11,15 +11,6 @@ fileprivate let pathEnvironmentVariable = "Path"
 fileprivate let pathEnvironmentSeparator: Character = ";"
 /// The file extension applied to binary executables
 fileprivate let executableSuffix = ".exe"
-#else
-/// The name of the environment variable containing the executable search path.
-fileprivate let pathEnvironmentVariable = "PATH"
-/// The separator between elements of the executable search path.
-fileprivate let pathEnvironmentSeparator: Character = ":"
-/// The file extension applied to binary executables
-fileprivate let executableSuffix = ""
-#endif
-
 
 /// A path component suffix used to guess at the right directory in
 /// which to find Swift when compiling build tool plugin executables.
@@ -28,6 +19,26 @@ fileprivate let executableSuffix = ""
 /// directory having this component suffix into the executable search
 /// path when plugins are run.
 fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
+
+extension URL {
+
+  /// Returns the URL given by removing all the elements of `suffix`
+  /// from the tail of `pathComponents`, or` `nil` if `suffix` is not
+  /// a suffix of `pathComponents`.
+  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix)
+    -> URL?
+  {
+    var r = self
+    var remainingSuffix = suffix[...]
+    while let x = remainingSuffix.popLast() {
+      if r.lastPathComponent != x { return nil }
+      r.deleteLastPathComponent()
+    }
+    return r
+  }
+
+}
+#endif
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
@@ -141,21 +152,3 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
 }
 
-extension URL {
-
-  /// Returns the URL given by removing all the elements of `suffix`
-  /// from the tail of `pathComponents`, or` `nil` if `suffix` is not
-  /// a suffix of `pathComponents`.
-  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix)
-    -> URL?
-  {
-    var r = self
-    var remainingSuffix = suffix[...]
-    while let x = remainingSuffix.popLast() {
-      if r.lastPathComponent != x { return nil }
-      r.deleteLastPathComponent()
-    }
-    return r
-  }
-
-}
