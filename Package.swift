@@ -3,6 +3,14 @@
 
 import PackageDescription
 
+fileprivate func buildToolDependencies(_ d: [Target.Dependency]) -> [Target.Dependency] {
+  #if os(Windows)
+  []
+  #else
+  d
+  #endif
+}
+
 let package = Package(
   name: "ResourceGeneration",
   products: [],
@@ -14,9 +22,8 @@ let package = Package(
     ),
 
     .plugin(
-      name: "ResourceGeneratorPlugin", capability: .buildTool()
-      // ,
-      // dependencies: [.target(name: "GenerateResource")]
+      name: "ResourceGeneratorPlugin", capability: .buildTool(),
+      dependencies: buildToolDependencies([.target(name: "GenerateResource")])
       ),
 
     .executableTarget(name: "GenerateResource",

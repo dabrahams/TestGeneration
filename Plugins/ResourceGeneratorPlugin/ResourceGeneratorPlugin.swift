@@ -86,6 +86,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
+    #if os(Windows)
     // We have to know where the converter sources are relative to this package.
     let converterSource = context.package.directory.url
       .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
@@ -122,6 +123,19 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
         inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
         outputFiles: outputs.map(\.spmPath)),
     ]
+    #else
+    let converter = try context.tool(named: "GenerateResource").path.url
+
+    return [
+      .buildCommand(
+        displayName: "RunningConverter",
+        executable: converter.spmPath,
+        arguments: inputs.map(\.path) + [ outputDirectory.path ],
+        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
+        outputFiles: outputs.map(\.spmPath))
+      ]
+
+    #endif
 
   }
 
