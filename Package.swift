@@ -3,7 +3,8 @@
 
 import PackageDescription
 
-fileprivate func buildToolDependencies(_ d: [Target.Dependency]) -> [Target.Dependency] {
+/// Returns an empty array on Windows, and `d` otherwise
+fileprivate func emptyOnWindows<T>(orElse d: [T]) -> [T] {
   #if os(Windows)
   []
   #else
@@ -23,8 +24,8 @@ let package = Package(
 
     .plugin(
       name: "ResourceGeneratorPlugin", capability: .buildTool(),
-      dependencies: buildToolDependencies([.target(name: "GenerateResource")])
-      ),
+      dependencies: emptyOnWindows(orElse: [.target(name: "GenerateResource")])
+    ),
 
     .executableTarget(name: "GenerateResource",
       swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]),
