@@ -98,6 +98,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     }
 
     #if os(Windows)
+
     // We have to know where the converter sources are relative to this package.
     let converterSource = context.package.directory.url
       .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
@@ -119,35 +120,29 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc" + executableSuffix) }
       .first { FileManager().isExecutableFile(atPath: $0.path) }!
 
-    return [
-       .buildCommand(
+    let buildConverter: [Command] = [
+      Command.buildCommand(
         displayName: "Compiling converter",
         executable: swiftc.spmPath,
         arguments: [ converterSource.path, "-o", converter.path, "-parse-as-library"],
         inputFiles: [ converterSource.spmPath ],
-        outputFiles: [ converter.spmPath ]),
+        outputFiles: [ converter.spmPath ])]
 
-       .buildCommand(
+    #else
+
+    let buildConverter: [Command] = []
+    let converter = try context.tool(named: "GenerateResource").path.url
+
+    #endif
+
+    return buildConverter + [
+      .buildCommand(
         displayName: "Running converter",
         executable: converter.spmPath,
         arguments: inputs.map(\.path) + [ outputDirectory.path ],
         inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
-        outputFiles: outputs.map(\.spmPath)),
-    ]
-    #else
-    let converter = try context.tool(named: "GenerateResource").path.url
-
-    return [
-      .buildCommand(
-        displayName: "RunningConverter",
-        executable: converter.spmPath,
-        arguments: inputs.map(\.path) + [ outputDirectory.path ],
-        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
         outputFiles: outputs.map(\.spmPath))
-      ]
-
-    #endif
-
+    ]
   }
 
 }
