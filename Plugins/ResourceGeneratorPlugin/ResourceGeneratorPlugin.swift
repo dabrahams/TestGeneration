@@ -130,7 +130,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
     #else
 
-    let buildConverter: [Command] = []
+    let buildConverter: [Command] = [] // This part will be taken care of automatically by SPM
     let converter = try context.tool(named: "GenerateResource").path.url
 
     #endif
