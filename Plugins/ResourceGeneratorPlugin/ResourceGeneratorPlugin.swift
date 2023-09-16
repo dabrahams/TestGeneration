@@ -5,39 +5,53 @@ import WinSDK
 #endif
 
 #if os(Windows)
+/// The name of the environment variable containing the executable search path.
 fileprivate let pathEnvironmentVariable = "Path"
 /// The separator between elements of the executable search path.
 fileprivate let pathEnvironmentSeparator: Character = ";"
+/// The file extension applied to binary executables
+fileprivate let executableSuffix = ".exe"
 #else
+/// The name of the environment variable containing the executable search path.
 fileprivate let pathEnvironmentVariable = "PATH"
+/// The separator between elements of the executable search path.
 fileprivate let pathEnvironmentSeparator: Character = ":"
+/// The file extension applied to binary executables
+fileprivate let executableSuffix = ""
 #endif
 
+
+/// A path component suffix used to guess at the right directory in
+/// which to find Swift when compiling build tool plugin executables.
 ///
+/// SwiftPM puts a descendant of the current Swift Toolchain directory
+/// having this component suffix into the executable search path when
+/// plugins are run.
 fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
 
 extension URL {
-  /// Returns the URL given by removing the entire `suffix`, if
-  /// present, from the tail of `self.pathComponents`; returns `nil`
-  /// otherwise.
-  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix) -> URL? {
-    var r = self
-    var remainingSuffix = suffix[...]
-    while let x = remainingSuffix.popLast() {
-      if r.lastPathComponent != x { return nil }
-      r.deleteLastPathComponent()
-    }
-    return r
+
+  /// Creates an instance referencing `path` in the filesystem.
+  init(_ path: Path) {
+    #if os(Windows)
+    self.init(fileURLWithPath: path.string.utf16Converted(by: GetFullPathNameW))
+    #else
+    self.init(fileURLWithPath: path.string)
+    #endif
   }
+
+  /// The SPM PackagePlugin.Path representation.
+  var spmPath: Path { Path(self.path) }
+
 }
 
 @main
 struct ResourceGeneratorPlugin: BuildToolPlugin {
 
   func createBuildCommands(context: PluginContext, target: Target) throws -> [Command] {
-    let inputs = (target as! SourceModuleTarget).sourceFiles(withSuffix: ".in").map {
-      URL($0.path)
-    }
+    // A downcast is always required to access the source files.
+    let inputs = (target as! SourceModuleTarget)
+      .sourceFiles(withSuffix: ".in").map { URL($0.path) }
 
     if inputs.isEmpty { return [] }
 
@@ -52,7 +66,9 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
 
     let script = URL(context.package.directory)
       .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
-    let executable = workDirectory.appendingPathComponent("GenerateResource.exe")
+
+    let executable = workDirectory.appendingPathComponent(
+      "GenerateResource" + executableSuffix)
 
     var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
       .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
@@ -65,7 +81,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       searchPath = [ p.appendingPathComponent("bin") ] + searchPath
     }
 
-    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc") }
+    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc" + executableSuffix) }
       .first { FileManager().isExecutableFile(atPath: $0.path) }!
 
     return [
@@ -115,14 +131,17 @@ extension String {
 
 extension URL {
 
-  init(_ path: Path) {
-    #if os(Windows)
-    self.init(fileURLWithPath: path.string.utf16Converted(by: GetFullPathNameW))
-    #else
-    self.init(fileURLWithPath: path.string)
-    #endif
+  /// Returns the URL given by removing all the elements of `suffix`, if
+  /// present, from the tail of `self.pathComponents`; returns `nil`
+  /// otherwise.
+  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix) -> URL? {
+    var r = self
+    var remainingSuffix = suffix[...]
+    while let x = remainingSuffix.popLast() {
+      if r.lastPathComponent != x { return nil }
+      r.deleteLastPathComponent()
+    }
+    return r
   }
-
-  var spmPath: Path { Path(self.path) } 
 
 }
