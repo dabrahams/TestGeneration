@@ -11,6 +11,14 @@ fileprivate let pathEnvironmentVariable = "Path"
 fileprivate let pathEnvironmentSeparator: Character = ";"
 /// The file extension applied to binary executables
 fileprivate let executableSuffix = ".exe"
+#else
+/// The name of the environment variable containing the executable search path.
+fileprivate let pathEnvironmentVariable = "PATH"
+/// The separator between elements of the executable search path.
+fileprivate let pathEnvironmentSeparator: Character = ":"
+/// The file extension applied to binary executables
+fileprivate let executableSuffix = ""
+#endif
 
 /// A path component suffix used to guess at the right directory in
 /// which to find Swift when compiling build tool plugin executables.
@@ -38,7 +46,6 @@ extension URL {
   }
 
 }
-#endif
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
@@ -97,21 +104,13 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
-    #if os(Windows)
     // Instead of depending on the GenerateResoure tool, which causes
     // Link errors on Windows (See Package.swift), "manually" assemble
     // a build command that builds the GenerateResoure tool into the
     // plugin work directory and add it to the returned commands.
 
-    // We have to know where the converter sources are relative to this package.
-    let converterSource = context.package.directory.url
-      .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
-
-    let converter = workDirectory.appendingPathComponent(
-      "GenerateResource" + executableSuffix)
-
     //
-    // Find an appropriate Swift executable with which to compile the converter.
+    // Find an appropriate Swift executable with which to run the converter.
     //
     var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
       .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
@@ -121,33 +120,21 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       searchPath = [ p.appendingPathComponent("bin") ] + searchPath
     }
 
-    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc" + executableSuffix) }
+    let swift = searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
       .first { FileManager().isExecutableFile(atPath: $0.path) }!
 
-    let buildConverter: [Command] = [
-      Command.buildCommand(
-        displayName: "Compiling converter",
-        executable: swiftc.spmPath,
-        arguments: [ converterSource.path, "-o", converter.path, "-parse-as-library"],
-        inputFiles: [ converterSource.spmPath ],
-        outputFiles: [ converter.spmPath ])]
-
-    #else
-
-    //  Building the tool will be taken care of automatically by SPM.
-    let buildConverter: [Command] = []
-    let converter = try context.tool(named: "GenerateResource").path.url
-
-    #endif
-
-    return buildConverter + [
+    return [
       .buildCommand(
         displayName: "Running converter",
-        executable: converter.spmPath,
-        arguments: inputs.map(\.path) + [ outputDirectory.path ],
-        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
+        executable: swift.spmPath,
+        arguments: [
+          "run",
+          "--scratch-path", workDirectory.appendingPathComponent("reentrant-build").path,
+          "--package-path", context.package.directory.url.path,
+          "GenerateResource"] + inputs.map(\.path) + [ outputDirectory.path ],
+        inputFiles: inputs.map(\.spmPath),
         outputFiles: outputs.map(\.spmPath))
-    ]
+    ] as [Command]
   }
 
 }
