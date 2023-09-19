@@ -114,9 +114,9 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       searchPath = [ p.appendingPathComponent("bin") ] + searchPath
     }
 
-    let swift = searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
-      .first { FileManager().isExecutableFile(atPath: $0.path) } ??
-      try context.tool(named: "swift").path.url
+    let swift = try searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
+      .first { FileManager().isExecutableFile(atPath: $0.path) }
+      ?? context.tool(named: "swift").path.url
 
     return [
       .buildCommand(
