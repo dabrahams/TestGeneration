@@ -103,15 +103,8 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     // a build command that builds the GenerateResoure tool into the
     // plugin work directory and add it to the returned commands.
 
-    // We have to know where the converter sources are relative to this package.
-    let converterSource = context.package.directory.url
-      .appendingPathComponent("Sources/GenerateResource/GenerateResource.swift")
-
-    let converter = workDirectory.appendingPathComponent(
-      "GenerateResource" + executableSuffix)
-
     //
-    // Find an appropriate Swift executable with which to compile the converter.
+    // Find an appropriate Swift executable with which to run the converter.
     //
     var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
       .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
@@ -121,26 +114,29 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       searchPath = [ p.appendingPathComponent("bin") ] + searchPath
     }
 
-    let swiftc = searchPath.lazy.map { $0.appendingPathComponent("swiftc" + executableSuffix) }
-      .first { FileManager().isExecutableFile(atPath: $0.path) }!
+    let swift = searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
+      .first { FileManager().isExecutableFile(atPath: $0.path) } ??
+      try context.tool(named: "swift").path.url
 
-    let buildConverter: [Command] = [
-      Command.buildCommand(
-        displayName: "Compiling converter",
-        executable: swiftc.spmPath,
-        arguments: [ converterSource.path, "-o", converter.path, "-parse-as-library"],
-        inputFiles: [ converterSource.spmPath ],
-        outputFiles: [ converter.spmPath ])]
+    return [
+      .buildCommand(
+        displayName: "Running converter",
+        executable: swift.spmPath,
+        arguments: [
+          "run",
+          "--scratch-path", workDirectory.appendingPathComponent("reentrant-build").path,
+          "--package-path", context.package.directory.url.path,
+          "GenerateResource"] + inputs.map(\.path) + [ outputDirectory.path ],
+        inputFiles: inputs.map(\.spmPath),
+        outputFiles: outputs.map(\.spmPath))
+    ]
+
 
     #else
 
-    //  Building the tool will be taken care of automatically by SPM.
-    let buildConverter: [Command] = []
     let converter = try context.tool(named: "GenerateResource").path.url
 
-    #endif
-
-    return buildConverter + [
+    return [
       .buildCommand(
         displayName: "Running converter",
         executable: converter.spmPath,
@@ -148,6 +144,8 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
         inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
         outputFiles: outputs.map(\.spmPath))
     ]
+
+    #endif
   }
 
 }
