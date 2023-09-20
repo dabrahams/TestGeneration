@@ -70,6 +70,7 @@ extension PackagePlugin.Package {
   }
 
 }
+#endif
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
