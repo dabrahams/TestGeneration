@@ -11,6 +11,14 @@ fileprivate let pathEnvironmentVariable = "Path"
 fileprivate let pathEnvironmentSeparator: Character = ";"
 /// The file extension applied to binary executables
 fileprivate let executableSuffix = ".exe"
+#else
+/// The name of the environment variable containing the executable search path.
+fileprivate let pathEnvironmentVariable = "PATH"
+/// The separator between elements of the executable search path.
+fileprivate let pathEnvironmentSeparator: Character = ":"
+/// The file extension applied to binary executables
+fileprivate let executableSuffix = ""
+#endif
 
 /// A path component suffix used to guess at the right directory in
 /// which to find Swift when compiling build tool plugin executables.
@@ -38,7 +46,38 @@ extension URL {
   }
 
 }
-#endif
+
+extension PackagePlugin.Target {
+
+  var allSourceFiles: [URL] {
+    return (self as? PackagePlugin.SourceModuleTarget)?.sourceFiles(withSuffix: "").map(\.path.url) ?? []
+  }
+
+}
+
+extension PackagePlugin.Package {
+
+  /// The source files in this package on which the given executable depends.
+  func sourceDependencies(ofExecutableProductNamed productName: String) throws -> Set<URL> {
+    var result: Set<URL> = []
+    let p = products(ofType: ExecutableProduct.self).first { $0.name == productName }!
+    var visitedTargets = Set<PackagePlugin.Target.ID>()
+
+    for t0 in p.targets {
+      if visitedTargets.insert(t0.id).inserted {
+        result.formUnion(t0.allSourceFiles)
+      }
+
+      for t1 in t0.recursiveTargetDependencies {
+        if visitedTargets.insert(t1.id).inserted {
+          result.formUnion(t1.allSourceFiles)
+        }
+      }
+    }
+    return result
+  }
+
+}
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
@@ -97,7 +136,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
-    #if os(Windows)
+    #if true // os(Windows)
     // Instead of depending on the GenerateResoure tool, which causes
     // Link errors on Windows (See Package.swift), "manually" assemble
     // a build command that builds the GenerateResoure tool into the
@@ -124,11 +163,20 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
         executable: swift.spmPath,
         arguments: [
           "run",
+          "--disable-sandbox",
           "--scratch-path", workDirectory.appendingPathComponent("reentrant-build").path,
           "--package-path", context.package.directory.url.path,
           "GenerateResource"] + inputs.map(\.path) + [ outputDirectory.path ],
         inputFiles: inputs.map(\.spmPath),
-        outputFiles: outputs.map(\.spmPath))
+        outputFiles: outputs.map(\.spmPath)),
+      .buildCommand(
+        displayName: "Diagnostics",
+        executable: PackagePlugin.Path("/bin/sh"),
+        arguments: [
+          "-c",
+          "echo", "INPUTS:"] + inputs.map(\.path),
+        inputFiles: inputs.map(\.spmPath),
+        outputFiles: [])
     ]
 
 
