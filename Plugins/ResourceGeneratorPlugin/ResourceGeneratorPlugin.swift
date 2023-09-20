@@ -162,7 +162,8 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
           "--package-path", context.package.directory.url.path,
           "GenerateResource"] + inputs.map(\.path) + [ outputDirectory.path ],
         inputFiles: try inputs.map(\.spmPath)
-          + context.package.sourceDependencies(ofProductNamed: "GenerateResource").lazy.map(\.spmPath),
+          + context.package.sourceDependencies(ofProductNamed: "GenerateResource").lazy.map(\.spmPath)
+          + [PackagePlugin.Path(#filePath)],
         outputFiles: outputs.map(\.spmPath))
     ]
 
@@ -176,7 +177,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
         displayName: "Running converter",
         executable: converter.spmPath,
         arguments: inputs.map(\.path) + [ outputDirectory.path ],
-        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
+        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ] + [PackagePlugin.Path(#filePath)],
         outputFiles: outputs.map(\.spmPath))
     ]
 
