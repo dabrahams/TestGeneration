@@ -29,7 +29,7 @@ let package = Package(
       // main functions.  Instead we build the tool "manually" as part
       // of running the plugin (see
       // Plugins/ResourceGeneratorPlugin/ResourceGeneratorPlugin.swift)
-      dependencies: unlessOSIsWindows([.target(name: "GenerateResource")])
+      dependencies: unlessOSIsWindows(["GenerateResource"])
     ),
 
     .executableTarget(name: "GenerateResource",
