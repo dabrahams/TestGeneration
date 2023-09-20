@@ -38,7 +38,38 @@ extension URL {
   }
 
 }
-#endif
+
+extension PackagePlugin.Target {
+
+  var allSourceFiles: [URL] {
+    return (self as? PackagePlugin.SourceModuleTarget)?.sourceFiles(withSuffix: "").map(\.path.url) ?? []
+  }
+
+}
+
+extension PackagePlugin.Package {
+
+  /// The source files in this package on which the given executable depends.
+  func sourceDependencies(ofProductNamed productName: String) throws -> Set<URL> {
+    var result: Set<URL> = []
+    let p = products.first { $0.name == productName }!
+    var visitedTargets = Set<PackagePlugin.Target.ID>()
+
+    for t0 in p.targets {
+      if visitedTargets.insert(t0.id).inserted {
+        result.formUnion(t0.allSourceFiles)
+      }
+
+      for t1 in t0.recursiveTargetDependencies {
+        if visitedTargets.insert(t1.id).inserted {
+          result.formUnion(t1.allSourceFiles)
+        }
+      }
+    }
+    return result
+  }
+
+}
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
@@ -124,10 +155,14 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
         executable: swift.spmPath,
         arguments: [
           "run",
+          // Only Macs currently use sandboxing, but nested sandboxes are prohibited, so
+          // for future resilience in case Windows gets a sandbox, disable it on thes reentrant build.
+          "--disable-sandbox",
           "--scratch-path", workDirectory.appendingPathComponent("reentrant-build").path,
           "--package-path", context.package.directory.url.path,
           "GenerateResource"] + inputs.map(\.path) + [ outputDirectory.path ],
-        inputFiles: inputs.map(\.spmPath),
+        inputFiles: try inputs.map(\.spmPath)
+          + context.package.sourceDependencies(ofProductNamed: "GenerateResource").lazy.map(\.spmPath),
         outputFiles: outputs.map(\.spmPath))
     ]
 
