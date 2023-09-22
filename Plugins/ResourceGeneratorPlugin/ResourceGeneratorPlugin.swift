@@ -1,116 +1,13 @@
-import PackagePlugin
 import Foundation
+import PackagePlugin
 #if os(Windows)
 import WinSDK
 #endif
 
-#if os(Windows)
-/// The name of the environment variable containing the executable search path.
-fileprivate let pathEnvironmentVariable = "Path"
-/// The separator between elements of the executable search path.
-fileprivate let pathEnvironmentSeparator: Character = ";"
-/// The file extension applied to binary executables
-fileprivate let executableSuffix = ".exe"
-
-/// A path component suffix used to guess at the right directory in
-/// which to find Swift when compiling build tool plugin executables.
-///
-/// SwiftPM seems to put a descendant of the current Swift Toolchain
-/// directory having this component suffix into the executable search
-/// path when plugins are run.
-fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
-
-extension URL {
-
-  /// Returns the URL given by removing all the elements of `suffix`
-  /// from the tail of `pathComponents`, or` `nil` if `suffix` is not
-  /// a suffix of `pathComponents`.
-  func sansPathComponentSuffix<Suffix: BidirectionalCollection<String>>(_ suffix: Suffix)
-    -> URL?
-  {
-    var r = self
-    var remainingSuffix = suffix[...]
-    while let x = remainingSuffix.popLast() {
-      if r.lastPathComponent != x { return nil }
-      r.deleteLastPathComponent()
-    }
-    return r
-  }
-
-}
-
-extension PackagePlugin.Target {
-
-  var allSourceFiles: [URL] {
-    return (self as? PackagePlugin.SourceModuleTarget)?.sourceFiles(withSuffix: "").map(\.path.url) ?? []
-  }
-
-}
-
-extension PackagePlugin.Package {
-
-  /// The source files in this package on which the given executable depends.
-  func sourceDependencies(ofProductNamed productName: String) throws -> Set<URL> {
-    var result: Set<URL> = []
-    let p = products.first { $0.name == productName }!
-    var visitedTargets = Set<PackagePlugin.Target.ID>()
-
-    for t0 in p.targets {
-      if visitedTargets.insert(t0.id).inserted {
-        result.formUnion(t0.allSourceFiles)
-      }
-
-      for t1 in t0.recursiveTargetDependencies {
-        if visitedTargets.insert(t1.id).inserted {
-          result.formUnion(t1.allSourceFiles)
-        }
-      }
-    }
-    return result
-  }
-
-}
-#endif
-
-// Workarounds for SPM's buggy `Path` type on Windows.
-//
-// SPM `PackagePlugin.Path` uses a representation that—if not
-// repaired before used by a `BuildToolPlugin` on Windows—will cause
-// files not to be found.
-extension Path {
-
-  /// A string representation appropriate to the platform
-  private var platformString: String {
-    #if os(Windows)
-    string.withCString(encodedAs: UTF16.self) { pwszPath in
-      // Allocate a buffer for the repaired UTF-16.
-      let bufferSize = Int(GetFullPathNameW(pwszPath, 0, nil, nil))
-      var buffer = Array<UTF16.CodeUnit>(repeating: 0, count: bufferSize)
-      // Actually do the repair
-      _ = GetFullPathNameW(pwszPath, DWORD(bufferSize), &buffer, nil)
-      // Drop the zero terminator and convert back to a Swift string.
-      return String(decoding: buffer.dropLast(), as: UTF16.self)
-    }
-    #else
-    string
-    #endif
-  }
-
-  /// A `URL` referring to the same location.
-  fileprivate var url: URL { URL(fileURLWithPath: platformString) }
-}
-
-extension URL {
-
-  /// A Swift Package Manager-compatible representation.
-  var spmPath: Path { Path(self.path) }
-
-}
-
 @main
-struct ResourceGeneratorPlugin: BuildToolPlugin {
+struct ResourceGeneratorPlugin: PortableBuildToolPlugin {
 
-  func createBuildCommands(context: PluginContext, target: Target) throws -> [Command] {
+  func portableBuildCommands(context: PackagePlugin.PluginContext, target: PackagePlugin.Target) throws -> [PortableBuildCommand] {
     // Rather than trust operations on `PackagePlugin.Path`, we
     // immediately convert them to `URL`s and do all manipulations
     // through `URL`'s API, converting back to `Path`s at the last
@@ -129,6 +26,16 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
       )
     }
 
+    return [
+      .buildCommand(
+        displayName: "Running converter",
+        executableProductName: "GenerateResources",
+        arguments: inputs.map(\.path) + [ outputDirectory.path ],
+        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
+        outputFiles: outputs.map(\.spmPath))
+    ]
+
+    /*
     #if os(Windows)
     // Instead of depending on the GenerateResoure tool, which causes
     // Link errors on Windows (See Package.swift), "manually" assemble
@@ -183,6 +90,7 @@ struct ResourceGeneratorPlugin: BuildToolPlugin {
     ]
 
     #endif
+    */
   }
 
 }

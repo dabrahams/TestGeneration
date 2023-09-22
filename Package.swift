@@ -32,6 +32,7 @@ let package = Package(
       dependencies: unlessOSIsWindows(["GenerateResource"])
     ),
 
+
     .executableTarget(name: "GenerateResource",
       swiftSettings: [ .unsafeFlags(["-parse-as-library"]) ]),
 
