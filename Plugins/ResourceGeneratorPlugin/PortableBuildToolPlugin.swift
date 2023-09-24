@@ -43,7 +43,7 @@ extension PackagePlugin.Target {
 extension PackagePlugin.Package {
 
   /// The source files in this package on which the given executable depends.
-  func sourceDependencies(ofProductNamed productName: String) throws -> Set<URL> {
+  func sourceDependencies(ofProductNamed productName: String) throws -> [URL] {
     var result: Set<URL> = []
     let p = products.first { $0.name == productName }!
     var visitedTargets = Set<PackagePlugin.Target.ID>()
@@ -59,11 +59,10 @@ extension PackagePlugin.Package {
         }
       }
     }
-    return result
+    return Array(result)
   }
 
 }
-#endif
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
@@ -186,7 +185,7 @@ extension PortableBuildCommand.Tool {
         .appendingPathComponent(UUID().uuidString).path
 
       return .init(
-        executable: swift,
+        executable: swift.spmPath,
         argumentPrefix: [
           "run",
           // Only Macs currently use sandboxing, but nested sandboxes are prohibited, so for future
@@ -202,7 +201,7 @@ extension PortableBuildCommand.Tool {
           "--package-path", context.package.directory.url.path,
           productName ],
         additionalSources:
-          context.package.sourceDependencies(ofProductNamed: productName))
+          try context.package.sourceDependencies(ofProductNamed: productName))
       #endif
     }
   }
