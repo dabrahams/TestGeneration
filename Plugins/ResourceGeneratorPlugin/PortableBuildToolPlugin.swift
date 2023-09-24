@@ -72,7 +72,7 @@ fileprivate extension PackagePlugin.Package {
 public extension Path {
 
   /// A string representation appropriate to the platform.
-  private var portableString: String {
+  public var platformString: String {
     #if os(Windows)
     string.withCString(encodedAs: UTF16.self) { pwszPath in
       // Allocate a buffer for the repaired UTF-16.
@@ -89,12 +89,12 @@ public extension Path {
   }
 
   /// A `URL` referring to the same location.
-  var url: URL { URL(fileURLWithPath: portableString) }
+  var url: URL { URL(fileURLWithPath: platformString) }
 
   /// A representation of `Self` that works on all platforms.
-  var repaired: Self {
+  var portable: Self {
     #if os(Windows)
-    Path(self.portableString)
+    Path(self.platformString)
     #else
     self
     #endif
@@ -163,12 +163,12 @@ public extension PortableBuildCommand.Tool {
   fileprivate func spmInvocation(in context: PackagePlugin.PluginContext) throws -> SPMInvocation {
     switch self {
     case .preInstalled(file: let pathToExecutable):
-      return .init(executable: pathToExecutable.repaired, argumentPrefix: [], additionalSources: [])
+      return .init(executable: pathToExecutable.portable, argumentPrefix: [], additionalSources: [])
 
     case .executableProduct(name: let productName):
       #if !os(Windows)
       return try .init(
-        executable: context.tool(named: productName).path.repaired,
+        executable: context.tool(named: productName).path.portable,
         argumentPrefix: [], additionalSources: [])
       #else
       // Instead of depending on context.tool(named:), which demands a declared dependency on the
@@ -254,8 +254,8 @@ fileprivate extension PortableBuildCommand {
         executable: i.executable,
         arguments: i.argumentPrefix + arguments,
         environment: environment,
-        inputFiles: inputFiles.map(\.repaired) + (pluginSources + i.additionalSources).map(\.spmPath),
-        outputFiles: outputFiles.map(\.repaired))
+        inputFiles: inputFiles.map(\.portable) + (pluginSources + i.additionalSources).map(\.spmPath),
+        outputFiles: outputFiles.map(\.portable))
 
     case .prebuildCommand(
            displayName: let displayName,
@@ -271,7 +271,7 @@ fileprivate extension PortableBuildCommand {
         executable: i.executable,
         arguments: i.argumentPrefix + arguments,
         environment: environment,
-        outputFilesDirectory: outputFilesDirectory.repaired)
+        outputFilesDirectory: outputFilesDirectory.portable)
     }
   }
 

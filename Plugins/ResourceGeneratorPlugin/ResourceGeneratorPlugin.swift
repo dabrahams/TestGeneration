@@ -24,10 +24,10 @@ struct ResourceGeneratorPlugin: PortableBuildToolPlugin {
       .buildCommand(
         displayName: "Running converter",
         tool: .executableProduct(name: "GenerateResource"),
-        // Note the use of `.repaired` on these paths before
-        // conversion to string.  Your tool may have trouble finding
-        // files and directories unless you go through that API.
-        arguments: (inputs + [ outputDirectory ]).map(\.repaired.string),
+        // Note the use of `.platformString` on these paths rather
+        // than `.string`.  Your executable tool may have trouble
+        // finding files and directories with `.string`.
+        arguments: (inputs + [ outputDirectory ]).map(\.platformString),
         inputFiles: inputs,
         outputFiles: outputs)
     ]
