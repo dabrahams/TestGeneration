@@ -24,6 +24,9 @@ struct ResourceGeneratorPlugin: PortableBuildToolPlugin {
       .buildCommand(
         displayName: "Running converter",
         tool: .executableProduct(name: "GenerateResource"),
+        // Note the use of `.repaired` on these paths before
+        // conversion to string.  Your tool may have trouble finding
+        // files and directories unless you go through that API.
         arguments: (inputs + [ outputDirectory ]).map(\.repaired.string),
         inputFiles: inputs,
         outputFiles: outputs)
