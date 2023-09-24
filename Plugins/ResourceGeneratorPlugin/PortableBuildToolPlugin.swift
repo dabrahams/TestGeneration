@@ -4,24 +4,6 @@ import Foundation
 import WinSDK
 #endif
 
-extension URL {
-
-  /// Returns `self` with the relative file path `suffix` appended.
-  ///
-  /// This is a portable version of `self.appending(path:)`, which is only available on recent
-  /// macOSes.
-  func appendingPath(_ suffix: String) -> URL {
-
-#if os(macOS)
-    if #available(macOS 13.0, *) { return self.appending(path: suffix) }
-#endif
-
-    return (suffix as NSString).pathComponents
-      .reduce(into: self) { $0.appendPathComponent($1) }
-  }
-
-}
-
 #if os(Windows)
 /// The name of the environment variable containing the executable search path.
 fileprivate let pathEnvironmentVariable = "Path"
@@ -30,7 +12,7 @@ fileprivate let pathEnvironmentSeparator: Character = ";"
 /// The file extension applied to binary executables
 fileprivate let executableSuffix = ".exe"
 
-extension URL {
+fileprivate extension URL {
 
   /// Returns the URL given by removing all the elements of `suffix`
   /// from the tail of `pathComponents`, or` `nil` if `suffix` is not
@@ -49,7 +31,7 @@ extension URL {
 
 }
 
-extension PackagePlugin.Target {
+fileprivate extension PackagePlugin.Target {
 
   /// The source files.
   var allSourceFiles: [URL] {
@@ -58,7 +40,7 @@ extension PackagePlugin.Target {
 
 }
 
-extension PackagePlugin.Package {
+fileprivate extension PackagePlugin.Package {
 
   /// The source files in this package on which the given executable depends.
   func sourceDependencies(ofProductNamed productName: String) throws -> [URL] {
@@ -87,10 +69,10 @@ extension PackagePlugin.Package {
 //
 // SPM `PackagePlugin.Path` uses a representation that—if not repaired before used by a
 // `BuildToolPlugin` on Windows—will cause files not to be found.
-extension Path {
+public extension Path {
 
   /// A string representation appropriate to the platform.
-  var portableString: String {
+  private var portableString: String {
     #if os(Windows)
     string.withCString(encodedAs: UTF16.self) { pwszPath in
       // Allocate a buffer for the repaired UTF-16.
@@ -119,15 +101,29 @@ extension Path {
   }
 }
 
-extension URL {
+public extension URL {
 
   /// A Swift Package Manager-compatible representation.
   var spmPath: Path { Path(self.path) }
 
+  /// Returns `self` with the relative file path `suffix` appended.
+  ///
+  /// This is a portable version of `self.appending(path:)`, which is only available on recent
+  /// macOSes.
+  func appendingPath(_ suffix: String) -> URL {
+
+#if os(macOS)
+    if #available(macOS 13.0, *) { return self.appending(path: suffix) }
+#endif
+
+    return (suffix as NSString).pathComponents
+      .reduce(into: self) { $0.appendPathComponent($1) }
+  }
+
 }
 
 /// Defines functionality for all plugins having a `buildTool` capability.
-protocol PortableBuildToolPlugin: BuildToolPlugin {
+public protocol PortableBuildToolPlugin: BuildToolPlugin {
 
   /// Returns the build commands for `target` in `context`.
   func portableBuildCommands(
@@ -139,7 +135,7 @@ protocol PortableBuildToolPlugin: BuildToolPlugin {
 
 extension PortableBuildToolPlugin {
 
-  func createBuildCommands(context: PluginContext, target: Target) async throws
+  public func createBuildCommands(context: PluginContext, target: Target) async throws
     -> [PackagePlugin.Command]
   {
 
@@ -151,7 +147,7 @@ extension PortableBuildToolPlugin {
 
 }
 
-extension PortableBuildCommand.Tool {
+public extension PortableBuildCommand.Tool {
 
   /// A partial translation to SPM plugin inputs of an invocation.
   struct SPMInvocation {
@@ -164,7 +160,7 @@ extension PortableBuildCommand.Tool {
     let additionalSources: [URL]
   }
 
-  func spmInvocation(in context: PackagePlugin.PluginContext) throws -> SPMInvocation {
+  fileprivate func spmInvocation(in context: PackagePlugin.PluginContext) throws -> SPMInvocation {
     switch self {
     case .preInstalled(file: let pathToExecutable):
       return .init(executable: pathToExecutable.repaired, argumentPrefix: [], additionalSources: [])
@@ -226,7 +222,7 @@ extension PortableBuildCommand.Tool {
   }
 }
 
-extension PortableBuildCommand {
+fileprivate extension PortableBuildCommand {
 
   /// Returns a representation of `self` for the result of a `BuildToolPlugin.createBuildCommands`
   /// invocation with the given `context` parameter.
