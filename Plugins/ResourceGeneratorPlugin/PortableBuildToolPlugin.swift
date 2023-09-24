@@ -29,6 +29,10 @@ extension URL {
     return r
   }
 
+  func appending(path: String) -> URL {
+    return (path as NSString).pathComponents
+      .reduce(into: self) { $0.appendPathComponent($1) }          // Fallback on earlier versions
+  }
 }
 
 extension PackagePlugin.Target {
@@ -99,6 +103,7 @@ extension Path {
     #endif
   }
 }
+#endif
 
 extension URL {
 
