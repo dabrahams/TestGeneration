@@ -26,9 +26,9 @@ let package = Package(
       // On Windows the plugin cannot have a dependency on the tool,
       // or building tests that depend (transitively) on the output of
       // the plugin fail to build with link errors about duplicate
-      // main functions.  Instead we build the tool "manually" as part
-      // of running the plugin (see
-      // Plugins/ResourceGeneratorPlugin/ResourceGeneratorPlugin.swift)
+      // main functions
+      // (https://github.com/apple/swift-package-manager/issues/6859#issuecomment-1720371716).
+      //
       dependencies: unlessOSIsWindows(["GenerateResource"])
     ),
 

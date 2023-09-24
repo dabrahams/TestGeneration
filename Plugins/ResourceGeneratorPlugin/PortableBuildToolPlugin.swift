@@ -12,14 +12,6 @@ fileprivate let pathEnvironmentSeparator: Character = ";"
 /// The file extension applied to binary executables
 fileprivate let executableSuffix = ".exe"
 
-/// A path component suffix used to guess at the right directory in
-/// which to find Swift when compiling build tool plugin executables.
-///
-/// SwiftPM seems to put a descendant of the current Swift Toolchain
-/// directory having this component suffix into the executable search
-/// path when plugins are run.
-fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
-
 extension URL {
 
   /// Returns the URL given by removing all the elements of `suffix`
@@ -149,10 +141,63 @@ extension PortableBuildToolPlugin {
 }
 
 extension PackagePlugin.Context {
-  struct PortableInvocation {
-    let executable: Path
+  struct ProductInvocation {
+    let executable: PackagePlugin.Path
     let argumentPrefix: [String]
-    let executableDependencies:
+    let additionalSources: [URL]
+  }
+
+  func invocation(ofExecutableProduct productName: String) -> ProductInvocation {
+    #if os(Windows)
+    // Instead of depending on context.tool(named:), which demands a declared dependency on the
+    // tool, which causes link errors on Windows
+    // (https://github.com/apple/swift-package-manager/issues/6859#issuecomment-1720371716),
+    // Invoke swift reentrantly to run the GenerateResoure tool.
+
+    //
+    // If a likely candidate for the current toolchain can be found in the `Path`, prepend its
+    // `bin/` dfirectory.
+    //
+    var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
+      .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
+
+    // SwiftPM seems to put a descendant of the currently-running Swift Toolchain/ directory having
+    // this component suffix into the executable search path when plugins are run.
+    fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
+
+    if let p = searchPath.lazy.compactMap({ $0.sansPathComponentSuffix(pluginAPISuffix) }).first {
+      searchPath = [ p.appendingPathComponent("bin") ] + searchPath
+    }
+
+    // Try searchPath first, then fall back to SPM's `tool(named:)`
+    let swift = try searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
+      .first { FileManager().isExecutableFile(atPath: $0.path) }
+      ?? context.tool(named: "swift").path.url
+
+    let scratchPath = FileManager().temporaryDirectory
+      .appendingPathComponent(UUID().uuidString).path
+
+    return .init(
+      executable: swift, argumentPrefix: [
+          "run",
+          // Only Macs currently use sandboxing, but nested sandboxes are prohibited, so for future
+          // resilience in case Windows gets a sandbox, disable it on these reentrant builds.
+          //
+          // Currently if we run this code on a Mac, disabling the sandbox on this inner build is
+          // enough to allow us to write on the scratchPath, which is outside any _outer_ sandbox.
+          // I think that's an SPM bug. If they fix it, we'll need to nest scratchPath in
+          // context.workDirectory and add an explicit build step to delete it to keep its contents
+          // from being incorporated into the resources of the target we're building.
+          "--disable-sandbox",
+          "--scratch-path", scratchPath,
+          "--package-path", context.package.directory.url.path,
+          productName ],
+      additionalSources: context.package.sourceDependencies(ofProductNamed: productName))
+
+    #else
+    return .init(
+      executable: context.tool(named: productName), argumentPrefix: [], additionalSources: [])
+    #endif
   }
 }
 
@@ -190,8 +235,14 @@ extension PortableBuildCommand {
            inputFiles: let inputFiles,
            outputFiles: let outputFiles):
 
-      let (executablePath, argumentPrefix)
-        = context.portableProduct(executableProductName)
+      let i = context.invocation(ofProductNamed: executableProductName)
+      return Self.buildCommand_(
+        displayName: displayName, preInstalledExecutable: i.executable,
+        arguments: i.argumentPrefix + arguments,
+        environment: environment,
+        inputFiles: inputFiles
+
+      )
 
       return .buildCommand(
         displayName: displayName,
