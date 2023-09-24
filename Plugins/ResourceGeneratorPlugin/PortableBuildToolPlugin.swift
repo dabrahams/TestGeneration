@@ -4,6 +4,22 @@ import Foundation
 import WinSDK
 #endif
 
+extension URL {
+
+  /// Returns `self` with the relative file path `suffix` appended.
+  ///
+  /// This is a portable version of `self.appending(path:)`, which is only available on recent
+  /// macOSes.
+  func appendingPath(_ suffix: String) -> URL {
+
+    if #available(macOS 13.0, *) { return self.appending(path: suffix) }
+
+    return (suffix as NSString).pathComponents
+      .reduce(into: self) { $0.appendPathComponent($1) }
+  }
+
+}
+
 #if os(Windows)
 /// The name of the environment variable containing the executable search path.
 fileprivate let pathEnvironmentVariable = "Path"
@@ -29,10 +45,6 @@ extension URL {
     return r
   }
 
-  func appending(path: String) -> URL {
-    return (path as NSString).pathComponents
-      .reduce(into: self) { $0.appendPathComponent($1) }          // Fallback on earlier versions
-  }
 }
 
 extension PackagePlugin.Target {
@@ -67,6 +79,7 @@ extension PackagePlugin.Package {
   }
 
 }
+#endif
 
 // Workarounds for SPM's buggy `Path` type on Windows.
 //
@@ -103,7 +116,6 @@ extension Path {
     #endif
   }
 }
-#endif
 
 extension URL {
 
@@ -234,14 +246,10 @@ extension PortableBuildCommand {
       /// regenerated (workaround for https://github.com/apple/swift-package-manager/issues/6936).
       let pluginSourceDirectory = URL(fileURLWithPath: pluginSourceFile).deletingLastPathComponent()
 
-      let pluginSources = try FileManager().subpathsOfDirectory(atPath: pluginSourceDirectory.path).map {        
-        if #available(macOS 13.0, *) {
-          return pluginSourceDirectory.appending(path: $0)
-        } else {
-          return ($0 as NSString).pathComponents
-            .reduce(into: pluginSourceDirectory) { $0.appendPathComponent($1) }          // Fallback on earlier versions
-        }
-      }
+      // We could filter out directories, but why bother?
+      let pluginSources = try FileManager()
+        .subpathsOfDirectory(atPath: pluginSourceDirectory.path)
+        .map { pluginSourceDirectory.appendingPath($0) }
 
       return .buildCommand(
         displayName: displayName,
