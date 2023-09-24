@@ -2,14 +2,11 @@
 
 import PackageDescription
 
-/// Returns `d` unless runnong on Windows; otherwise returns an empty array.
-fileprivate func unlessOSIsWindows<T>(_ d: [T]) -> [T] {
-  #if os(Windows)
-  []
-  #else
-  d
-  #endif
-}
+#if os(Windows)
+let onWindows = true
+#else
+let onWindows = false
+#endif
 
 let package = Package(
   name: "ResourceGeneration",
@@ -29,7 +26,7 @@ let package = Package(
       // main functions
       // (https://github.com/apple/swift-package-manager/issues/6859#issuecomment-1720371716).
       //
-      dependencies: unlessOSIsWindows(["GenerateResource"])
+      dependencies: onWindows ? [] : ["GenerateResource"]
     ),
 
 
