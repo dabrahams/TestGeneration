@@ -12,7 +12,9 @@ extension URL {
   /// macOSes.
   func appendingPath(_ suffix: String) -> URL {
 
+#if os(macOS)
     if #available(macOS 13.0, *) { return self.appending(path: suffix) }
+#endif
 
     return (suffix as NSString).pathComponents
       .reduce(into: self) { $0.appendPathComponent($1) }
