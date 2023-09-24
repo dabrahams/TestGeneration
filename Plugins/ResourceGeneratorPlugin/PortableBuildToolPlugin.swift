@@ -72,7 +72,7 @@ fileprivate extension PackagePlugin.Package {
 public extension Path {
 
   /// A string representation appropriate to the platform.
-  public var platformString: String {
+  var platformString: String {
     #if os(Windows)
     string.withCString(encodedAs: UTF16.self) { pwszPath in
       // Allocate a buffer for the repaired UTF-16.
