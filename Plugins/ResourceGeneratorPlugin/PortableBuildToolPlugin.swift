@@ -125,60 +125,69 @@ extension PortableBuildToolPlugin {
     -> [PackagePlugin.Command]
   {
 
-    /// Guess at files that constitute this plugin, the changing of which should cause outputs to be
-    /// regenerated (workaround for https://github.com/apple/swift-package-manager/issues/6936).
-    let pluginSources = try FileManager()
-      .subpathsOfDirectory(atPath: URL(fileURLWithPath: #filePath).deletingLastPathComponent().path)
-      .map(URL.init(fileURLWithPath:))
-      .filter { !$0.hasDirectoryPath }
-
     return try await portableBuildCommands(context: context, target: target).map {
-      $0.spmCommand(context: context, pluginSources: pluginSources)
+      try $0.spmCommand(in: context)
     }
 
   }
 
 }
 
-extension PackagePlugin.Context {
-  struct ProductInvocation {
+extension PortableBuildCommand.Tool {
+
+  /// A partial translation to SPM plugin inputs of an invocation.
+  struct SPMInvocation {
+    /// The executable that will actually run.
     let executable: PackagePlugin.Path
+    /// The command-line arguments that must precede the ones specified by the caller.
     let argumentPrefix: [String]
+    /// The source files that must be added as build dependencies if we want the tool
+    /// to be re-run when its sources change.
     let additionalSources: [URL]
   }
 
-  func invocation(ofExecutableProduct productName: String) -> ProductInvocation {
-    #if os(Windows)
-    // Instead of depending on context.tool(named:), which demands a declared dependency on the
-    // tool, which causes link errors on Windows
-    // (https://github.com/apple/swift-package-manager/issues/6859#issuecomment-1720371716),
-    // Invoke swift reentrantly to run the GenerateResoure tool.
+  func spmInvocation(in context: PackagePlugin.PluginContext) throws -> SPMInvocation {
+    switch self {
+    case .preInstalled(file: let pathToExecutable):
+      return .init(executable: pathToExecutable.repaired, argumentPrefix: [], additionalSources: [])
 
-    //
-    // If a likely candidate for the current toolchain can be found in the `Path`, prepend its
-    // `bin/` dfirectory.
-    //
-    var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
-      .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
+    case .executableProduct(name: let productName):
+      #if !os(Windows)
+      return try .init(
+        executable: context.tool(named: productName).path.repaired,
+        argumentPrefix: [], additionalSources: [])
+      #else
+      // Instead of depending on context.tool(named:), which demands a declared dependency on the
+      // tool, which causes link errors on Windows
+      // (https://github.com/apple/swift-package-manager/issues/6859#issuecomment-1720371716),
+      // Invoke swift reentrantly to run the GenerateResoure tool.
 
-    // SwiftPM seems to put a descendant of the currently-running Swift Toolchain/ directory having
-    // this component suffix into the executable search path when plugins are run.
-    fileprivate let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
+      //
+      // If a likely candidate for the current toolchain can be found in the `Path`, prepend its
+      // `bin/` dfirectory.
+      //
+      var searchPath = ProcessInfo.processInfo.environment[pathEnvironmentVariable]!
+        .split(separator: pathEnvironmentSeparator).map { URL(fileURLWithPath: String($0)) }
 
-    if let p = searchPath.lazy.compactMap({ $0.sansPathComponentSuffix(pluginAPISuffix) }).first {
-      searchPath = [ p.appendingPathComponent("bin") ] + searchPath
-    }
+      // SwiftPM seems to put a descendant of the currently-running Swift Toolchain/ directory having
+      // this component suffix into the executable search path when plugins are run.
+      let pluginAPISuffix = ["lib", "swift", "pm", "PluginAPI"]
 
-    // Try searchPath first, then fall back to SPM's `tool(named:)`
-    let swift = try searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
-      .first { FileManager().isExecutableFile(atPath: $0.path) }
-      ?? context.tool(named: "swift").path.url
+      if let p = searchPath.lazy.compactMap({ $0.sansPathComponentSuffix(pluginAPISuffix) }).first {
+        searchPath = [ p.appendingPathComponent("bin") ] + searchPath
+      }
 
-    let scratchPath = FileManager().temporaryDirectory
-      .appendingPathComponent(UUID().uuidString).path
+      // Try searchPath first, then fall back to SPM's `tool(named:)`
+      let swift = try searchPath.lazy.map { $0.appendingPathComponent("swift" + executableSuffix) }
+        .first { FileManager().isExecutableFile(atPath: $0.path) }
+        ?? context.tool(named: "swift").path.url
 
-    return .init(
-      executable: swift, argumentPrefix: [
+      let scratchPath = FileManager().temporaryDirectory
+        .appendingPathComponent(UUID().uuidString).path
+
+      return .init(
+        executable: swift,
+        argumentPrefix: [
           "run",
           // Only Macs currently use sandboxing, but nested sandboxes are prohibited, so for future
           // resilience in case Windows gets a sandbox, disable it on these reentrant builds.
@@ -192,12 +201,10 @@ extension PackagePlugin.Context {
           "--scratch-path", scratchPath,
           "--package-path", context.package.directory.url.path,
           productName ],
-      additionalSources: context.package.sourceDependencies(ofProductNamed: productName))
-
-    #else
-    return .init(
-      executable: context.tool(named: productName), argumentPrefix: [], additionalSources: [])
-    #endif
+        additionalSources:
+          context.package.sourceDependencies(ofProductNamed: productName))
+      #endif
+    }
   }
 }
 
@@ -205,67 +212,56 @@ extension PortableBuildCommand {
 
   /// Returns a representation of `self` for the result of a `BuildToolPlugin.createBuildCommands`
   /// invocation with the given `context` parameter.
-  func spmCommand(
-    context: PackagePlugin.PluginContext, pluginSources: [URL]
-  ) -> PackagePlugin.Command {
-
-    let spmPluginSources = pluginSources.lazy.map(\.spmPath)
+  func spmCommand(in context: PackagePlugin.PluginContext) throws -> PackagePlugin.Command {
 
     switch self {
-    case .buildCommand_(
-           displayName: let displayName,
-           preInstalledExecutable: let preInstalledExecutable,
-           arguments: let arguments,
-           environment: let environment,
-           inputFiles: let inputFiles,
-           outputFiles: let outputFiles):
-
-      return .buildCommand(
-        displayName: displayName,
-        executable: preInstalledExecutable.repaired,
-        arguments: arguments,
-        inputFiles: inputFiles.map(\.repaired) + spmPluginSources,
-        outputFiles: outputFiles.map(\.repaired))
-
     case .buildCommand(
            displayName: let displayName,
-           executableProductName: let executableProductName,
+           tool: let tool,
            arguments: let arguments,
            environment: let environment,
            inputFiles: let inputFiles,
-           outputFiles: let outputFiles):
+           outputFiles: let outputFiles,
+           pluginSourceFile: let pluginSourceFile):
 
-      let i = context.invocation(ofProductNamed: executableProductName)
-      return Self.buildCommand_(
-        displayName: displayName, preInstalledExecutable: i.executable,
-        arguments: i.argumentPrefix + arguments,
-        environment: environment,
-        inputFiles: inputFiles
+      let i = try tool.spmInvocation(in: context)
 
-      )
+      /// Guess at files that constitute this plugin, the changing of which should cause outputs to be
+      /// regenerated (workaround for https://github.com/apple/swift-package-manager/issues/6936).
+      let pluginSourceDirectory = URL(fileURLWithPath: pluginSourceFile).deletingLastPathComponent()
+
+      let pluginSources = try FileManager().subpathsOfDirectory(atPath: pluginSourceDirectory.path).map {        
+        if #available(macOS 13.0, *) {
+          return pluginSourceDirectory.appending(path: $0)
+        } else {
+          return ($0 as NSString).pathComponents
+            .reduce(into: pluginSourceDirectory) { $0.appendPathComponent($1) }          // Fallback on earlier versions
+        }
+      }
 
       return .buildCommand(
         displayName: displayName,
-        executable: executablePath,
-        arguments: arguments,
-        inputFiles: inputFiles.map(\.repaired) + pluginSources.map(\.spmPath),
+        executable: i.executable,
+        arguments: i.argumentPrefix + arguments,
+        environment: environment,
+        inputFiles: inputFiles.map(\.repaired) + (pluginSources + i.additionalSources).map(\.spmPath),
         outputFiles: outputFiles.map(\.repaired))
-
-    case .prebuildCommand_(
-           displayName: let displayName,
-           preInstalledExecutable: let preInstalledExecutable,
-           arguments: let arguments,
-           environment: let environment,
-           outputFilesDirectory: let outputFilesDirectory):
-      fatalError()
 
     case .prebuildCommand(
            displayName: let displayName,
-           executableProductName: let executableProductName,
+           tool: let tool,
            arguments: let arguments,
            environment: let environment,
            outputFilesDirectory: let outputFilesDirectory):
-      fatalError()
+
+      let i = try tool.spmInvocation(in: context)
+
+      return .prebuildCommand(
+        displayName: displayName,
+        executable: i.executable,
+        arguments: i.argumentPrefix + arguments,
+        environment: environment,
+        outputFilesDirectory: outputFilesDirectory.repaired)
     }
   }
 
@@ -275,41 +271,16 @@ extension PortableBuildCommand {
 /// A command to run during the build.
 public enum PortableBuildCommand {
 
-  /// A command that runs when any of its ouput files are needed by
-  /// the build, but out-of-date.
-  ///
-  /// An output file is out-of-date if it doesn't exist, or if any
-  /// input files have changed since the command was last run.
-  ///
-  /// - Note: the paths in the list of output files may depend on the list of
-  ///   input file paths, but **must not** depend on reading the contents of
-  ///   any input files. Such cases must be handled using a `prebuildCommand`.
-  ///
-  /// - Parameters:
-  ///   - displayName: An optional string to show in build logs and other
-  ///     status areas.
-  ///   - preInstalledExecutable: The absolute path to the executable to be
-  ///     invoked, which should be outside the build directory of the package
-  ///     being built.
-  ///   - arguments: Command-line arguments to be passed to the executable.
-  ///   - environment: Environment variable assignments visible to the
-  ///     executable.
-  ///   - inputFiles: Files on which the contents of output files may depend.
-  ///     Any paths passed as `arguments` should typically be passed here as
-  ///     well.
-  ///   - outputFiles: Files to be generated or updated by the executable.
-  ///     Any files recognizable by their extension as source files
-  ///     (e.g. `.swift`) are compiled into the target for which this command
-  ///     was generated as if in its source directory; other files are treated
-  ///     as resources as if explicitly listed in `Package.swift` using
-  ///     `.process(...)`.
-  case buildCommand_(
-        displayName: String?,
-        preInstalledExecutable: Path,
-        arguments: [String],
-        environment: [String: String] = [:],
-        inputFiles: [Path] = [],
-        outputFiles: [Path] = [])
+  /// A command-line tool to be invoked.
+  public enum Tool {
+
+    /// The executable product named `name` in this package
+    case executableProduct(name: String)
+
+    /// The executable at `file`, an absolute path outside the build directory of the package being
+    /// built.
+    case preInstalled(file: PackagePlugin.Path)
+  }
 
   /// A command that runs when any of its ouput files are needed by
   /// the build, but out-of-date.
@@ -324,27 +295,30 @@ public enum PortableBuildCommand {
   /// - Parameters:
   ///   - displayName: An optional string to show in build logs and other
   ///     status areas.
-  ///   - executableProductName: The name of the executable product to be
-  ///     invoked.
-  ///   - arguments: Command-line arguments to be passed to the executable.
+  ///   - tool: The command-line tool invoked to build the output files.
+  ///   - arguments: Command-line arguments to be passed to the tool.
   ///   - environment: Environment variable assignments visible to the
-  ///     executable.
+  ///     tool.
   ///   - inputFiles: Files on which the contents of output files may depend.
   ///     Any paths passed as `arguments` should typically be passed here as
   ///     well.
-  ///   - outputFiles: Files to be generated or updated by the executable.
+  ///   - outputFiles: Files to be generated or updated by the tool.
   ///     Any files recognizable by their extension as source files
   ///     (e.g. `.swift`) are compiled into the target for which this command
   ///     was generated as if in its source directory; other files are treated
   ///     as resources as if explicitly listed in `Package.swift` using
   ///     `.process(...)`.
+  ///   - pluginSourceFile: the path to a source file of the PortableBuildToolPlugin; allow the
+  ///     default to take effect.
   case buildCommand(
         displayName: String?,
-        executableProductName: String,
+        tool: Tool,
         arguments: [String],
         environment: [String: String] = [:],
         inputFiles: [Path] = [],
-        outputFiles: [Path] = [])
+        outputFiles: [Path] = [],
+        pluginSourceFile: String = #filePath
+       )
 
   /// A command that runs unconditionally before every build.
   ///
@@ -360,45 +334,10 @@ public enum PortableBuildCommand {
   /// - Parameters:
   ///   - displayName: An optional string to show in build logs and other
   ///     status areas.
-  ///   - executable: The absolute path to the executable to be
-  ///     invoked, which should be outside the build directory of the
-  ///     package being built.
-  ///   - arguments: Command-line arguments to be passed to the executable.
-  ///   - environment: Environment variable assignments visible to the executable.
-  ///   - workingDirectory: Optional initial working directory when the executable
-  ///     runs.
-  ///   - outputFilesDirectory: A directory into which the command writes its
-  ///     output files.  Any files there recognizable by their extension as
-  ///     source files (e.g. `.swift`) are compiled into the target for which
-  ///     this command was generated as if in its source directory; other
-  ///     files are treated as resources as if explicitly listed in
-  ///     `Package.swift` using `.process(...)`.
-  case prebuildCommand_(
-         displayName: String?,
-         preInstalledExecutable: Path,
-         arguments: [String],
-         environment: [String: String] = [:],
-         outputFilesDirectory: Path)
-
-  /// A command that runs unconditionally before every build.
-  ///
-  /// Prebuild commands can have a significant performance impact
-  /// and should only be used when there would be no way to know the
-  /// list of output file paths without first reading the contents
-  /// of one or more input files. Typically there is no way to
-  /// determine this list without first running the command, so
-  /// instead of encoding that list, the caller supplies an
-  /// `outputFilesDirectory` parameter, and all files in that
-  /// directory after the command runs are treated as output files.
-  ///
-  /// - Parameters:
-  ///   - displayName: An optional string to show in build logs and other
-  ///     status areas.
-  ///   - executableProductName: The name of the executable product to be
-  ///     invoked.
-  ///   - arguments: Command-line arguments to be passed to the executable.
-  ///   - environment: Environment variable assignments visible to the executable.
-  ///   - workingDirectory: Optional initial working directory when the executable
+  ///   - tool: The command-line tool invoked to build the output files.
+  ///   - arguments: Command-line arguments to be passed to the tool.
+  ///   - environment: Environment variable assignments visible to the tool.
+  ///   - workingDirectory: Optional initial working directory when the tool
   ///     runs.
   ///   - outputFilesDirectory: A directory into which the command writes its
   ///     output files.  Any files there recognizable by their extension as
@@ -408,7 +347,7 @@ public enum PortableBuildCommand {
   ///     `Package.swift` using `.process(...)`.
   case prebuildCommand(
          displayName: String?,
-         executableProductName: String,
+         tool: Tool,
          arguments: [String],
          environment: [String: String] = [:],
          outputFilesDirectory: Path)
