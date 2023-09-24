@@ -31,7 +31,7 @@ struct ResourceGeneratorPlugin: PortableBuildToolPlugin {
         displayName: "Running converter",
         executableProductName: "GenerateResources",
         arguments: inputs.map(\.path) + [ outputDirectory.path ],
-        inputFiles: inputs.map(\.spmPath) + [ converter.spmPath ],
+        inputFiles: inputs.map(\.spmPath),
         outputFiles: outputs.map(\.spmPath))
     ]
 

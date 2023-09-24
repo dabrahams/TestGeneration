@@ -98,6 +98,15 @@ extension Path {
 
   /// A `URL` referring to the same location.
   var url: URL { URL(fileURLWithPath: portableString) }
+
+  /// A representation of `Self` that works on all platforms.
+  var repaired: Self {
+    #if os(Windows)
+    Path(self.portableString)
+    #else
+    self
+    #endif
+  }
 }
 
 extension URL {
@@ -132,20 +141,31 @@ extension PortableBuildToolPlugin {
       .filter { !$0.hasDirectoryPath }
 
     return try await portableBuildCommands(context: context, target: target).map {
-      $0.spmCommand(context: context, target: target, pluginSources: pluginSources)
+      $0.spmCommand(context: context, pluginSources: pluginSources)
     }
 
   }
 
 }
 
+extension PackagePlugin.Context {
+  struct PortableInvocation {
+    let executable: Path
+    let argumentPrefix: [String]
+    let executableDependencies:
+  }
+}
+
 extension PortableBuildCommand {
 
   /// Returns a representation of `self` for the result of a `BuildToolPlugin.createBuildCommands`
-  /// invocation with the given `context` and `target` parameters.
+  /// invocation with the given `context` parameter.
   func spmCommand(
-    context: PackagePlugin.PluginContext, target: PackagePlugin.Target, pluginSources: [URL]
+    context: PackagePlugin.PluginContext, pluginSources: [URL]
   ) -> PackagePlugin.Command {
+
+    let spmPluginSources = pluginSources.lazy.map(\.spmPath)
+
     switch self {
     case .buildCommand_(
            displayName: let displayName,
@@ -154,7 +174,13 @@ extension PortableBuildCommand {
            environment: let environment,
            inputFiles: let inputFiles,
            outputFiles: let outputFiles):
-      fatalError()
+
+      return .buildCommand(
+        displayName: displayName,
+        executable: preInstalledExecutable.repaired,
+        arguments: arguments,
+        inputFiles: inputFiles.map(\.repaired) + spmPluginSources,
+        outputFiles: outputFiles.map(\.repaired))
 
     case .buildCommand(
            displayName: let displayName,
@@ -163,7 +189,16 @@ extension PortableBuildCommand {
            environment: let environment,
            inputFiles: let inputFiles,
            outputFiles: let outputFiles):
-      fatalError()
+
+      let (executablePath, argumentPrefix)
+        = context.portableProduct(executableProductName)
+
+      return .buildCommand(
+        displayName: displayName,
+        executable: executablePath,
+        arguments: arguments,
+        inputFiles: inputFiles.map(\.repaired) + pluginSources.map(\.spmPath),
+        outputFiles: outputFiles.map(\.repaired))
 
     case .prebuildCommand_(
            displayName: let displayName,
