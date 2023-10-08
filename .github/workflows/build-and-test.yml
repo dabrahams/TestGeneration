@@ -21,7 +21,7 @@ name: Build and test
 
 jobs:
   build-devcontainer:
-    name: "Devcontainer: ${{ matrix.host.os }}/${{ matrix.configuration }}"
+    name: "Devcontainer: ${{ matrix.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
@@ -38,8 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - run: git config --global core.autocrlf input
-
       - name: Build and Test
         uses: devcontainers/ci@v0.3
         with:
@@ -51,7 +49,7 @@ jobs:
               ${{ matrix.host.test-options }}
 
   build-native:
-    name: "Native: ${{ matrix.os }}/${{ matrix.configuration }}"
+    name: "Native: ${{ matrix.sys.os }}/${{ matrix.configuration }}"
     strategy:
       fail-fast: false
       matrix:
@@ -61,34 +59,41 @@ jobs:
             test-options: "-v"
           }
         ]
-        os: [macos-latest, ubuntu-latest]
+        sys:
+          - { os: macos-latest, shell: 'bash -eo pipefail {0}'}
+          - { os: ubuntu-latest, shell: 'bash -eo pipefail {0}'}
+          - { os: windows-latest, shell: cmd }
         swift: [{version: "5.8"}]
         configuration: [debug, release]
 
-    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.sys.shell }}
+
+    runs-on: ${{ matrix.sys.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - run: git config --global core.autocrlf input
-
       - name: Setup swift
+        if: matrix.sys.os != 'windows-latest'
         uses: swift-actions/setup-swift@v1
         with:
           swift-version: ${{ matrix.swift.version }}
 
-      - run: swift --version
+      - name: Setup swift
+        if: matrix.sys.os == 'windows-latest'
+        uses: compnerd/gha-setup-swift@main
+        with:
+          branch: development
+          tag: DEVELOPMENT-SNAPSHOT-2023-08-12-a
 
       - name: Build (${{ matrix.configuration }})
         run: |
-          export PKG_CONFIG_PATH=$PWD &&
-
           swift build -c ${{ matrix.configuration }} \
             ${{ matrix.host.build-options }}
 
       - name: Test (${{ matrix.configuration }})
         run: |
-          export PKG_CONFIG_PATH=$PWD &&
-
           swift test -c ${{ matrix.configuration }} \
             ${{ matrix.host.test-options }}
