@@ -78,14 +78,8 @@ jobs:
 
       - name: Build (${{ matrix.configuration }})
         run: |
-          export PKG_CONFIG_PATH=$PWD &&
-
-          swift build -c ${{ matrix.configuration }} \
-            ${{ matrix.host.build-options }}
+          swift build -c ${{ matrix.configuration }} ${{ matrix.host.build-options }}
 
       - name: Test (${{ matrix.configuration }})
         run: |
-          export PKG_CONFIG_PATH=$PWD &&
-
-          swift test -c ${{ matrix.configuration }} \
-            ${{ matrix.host.test-options }}
+          swift test -c ${{ matrix.configuration }} ${{ matrix.host.test-options }}
