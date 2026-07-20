@@ -28,4 +28,5 @@ struct TestGeneratorPlugin: BuildToolPlugin {
     return [cmd]
   }
 
+  var
 }
